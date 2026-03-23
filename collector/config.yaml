@@ -1,0 +1,17 @@
+# OpenClaw Monitor Collector 配置
+
+# 监控后端地址
+server_url: "http://127.0.0.1:9200"
+
+# 实例标识 (每台机器唯一)
+instance_name: "prod-01"
+
+# 采集间隔 (秒)
+collect_interval: 60
+
+# OpenClaw Gateway 地址
+openclaw_host: "127.0.0.1"
+openclaw_port: 18789
+
+# OpenClaw CLI 路径
+openclaw_bin: "openclaw"
