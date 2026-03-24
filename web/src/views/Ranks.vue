@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { getRanks } from '../api'
 import { useI18n } from '../i18n'
 
@@ -9,8 +9,9 @@ const allAgents = ref<any[]>([])
 const totalAgents = ref(0)
 const hoveredAgent = ref<any>(null)
 const tooltipPos = ref({ x: 0, y: 0 })
+const containerRef = ref<HTMLElement | null>(null)
+const containerSize = ref({ w: 800, h: 600 })
 
-// 调色板 — 像素风配色
 const palette = [
   '#D71921', '#2F54EB', '#1B873F', '#FA8C16', '#722ED1',
   '#13C2C2', '#EB2F96', '#D4A017', '#597EF7', '#52C41A',
@@ -20,29 +21,88 @@ const palette = [
 
 const getColor = (idx: number) => palette[idx % palette.length]
 
-// 像素点背景 SVG pattern（内联）
-const pixelBg = (color: string) => {
-  const encoded = encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="6" height="6"><rect width="5" height="5" fill="${color}" opacity="0.25"/></svg>`
-  )
-  return `url("data:image/svg+xml,${encoded}")`
-}
+// 简单的圆圈碰撞检测放置算法
+const layoutBubbles = (agents: any[], w: number, h: number) => {
+  if (agents.length === 0) return []
 
-// 根据 token 数量计算圆圈尺寸（最小60，最大220）
-const bubbles = computed(() => {
-  if (allAgents.value.length === 0) return []
-  const tokens = allAgents.value.map(a => a.total_tokens || 1)
+  const tokens = agents.map(a => a.total_tokens || 1)
   const maxT = Math.max(...tokens)
   const minT = Math.min(...tokens)
   const range = maxT - minT || 1
 
-  return allAgents.value.map((agent, idx) => {
+  // 按 token 从大到小排列，大圆先放置
+  const sorted = agents.map((agent, idx) => {
     const ratio = (agent.total_tokens - minT) / range
-    // 用 sqrt 让面积与 token 成正比
-    const size = 60 + Math.sqrt(ratio) * 160
-    const color = getColor(idx)
-    return { ...agent, size, color, idx }
-  })
+    const size = 60 + Math.sqrt(ratio) * 140
+    return { ...agent, size, color: getColor(idx), idx }
+  }).sort((a, b) => b.size - a.size)
+
+  const placed: { x: number; y: number; r: number }[] = []
+  const result: any[] = []
+  const cx = w / 2
+  const cy = h / 2
+
+  for (const bubble of sorted) {
+    const r = bubble.size / 2
+    let bestX = cx
+    let bestY = cy
+    let found = false
+
+    // 从中心向外螺旋搜索不重叠的位置
+    for (let attempt = 0; attempt < 500; attempt++) {
+      const angle = attempt * 0.5 + Math.random() * 0.3
+      const dist = attempt * 3 + Math.random() * 20
+      const tx = cx + Math.cos(angle) * dist
+      const ty = cy + Math.sin(angle) * dist
+
+      // 边界检查
+      if (tx - r < 0 || tx + r > w || ty - r < 0 || ty + r > h) continue
+
+      // 碰撞检查
+      let collides = false
+      for (const p of placed) {
+        const dx = tx - p.x
+        const dy = ty - p.y
+        const minDist = r + p.r + 6 // 6px 间距
+        if (dx * dx + dy * dy < minDist * minDist) {
+          collides = true
+          break
+        }
+      }
+
+      if (!collides) {
+        bestX = tx
+        bestY = ty
+        found = true
+        break
+      }
+    }
+
+    // 如果没找到完美位置，用随机偏移
+    if (!found) {
+      bestX = cx + (Math.random() - 0.5) * (w - bubble.size)
+      bestY = cy + (Math.random() - 0.5) * (h - bubble.size)
+      bestX = Math.max(r, Math.min(w - r, bestX))
+      bestY = Math.max(r, Math.min(h - r, bestY))
+    }
+
+    placed.push({ x: bestX, y: bestY, r })
+    result.push({ ...bubble, x: bestX - r, y: bestY - r })
+  }
+
+  return result
+}
+
+const bubbles = computed(() => {
+  return layoutBubbles(allAgents.value, containerSize.value.w, containerSize.value.h)
+})
+
+// 计算容器需要的高度
+const containerHeight = computed(() => {
+  const count = allAgents.value.length
+  if (count <= 3) return 400
+  if (count <= 10) return 500
+  return Math.min(800, 400 + count * 20)
 })
 
 const formatTokens = (n: number) => {
@@ -65,10 +125,20 @@ const updateTooltipPos = (e: MouseEvent) => {
   tooltipPos.value = { x: e.clientX + 16, y: e.clientY + 16 }
 }
 
+const updateContainerSize = () => {
+  if (containerRef.value) {
+    containerSize.value = {
+      w: containerRef.value.clientWidth,
+      h: containerRef.value.clientHeight,
+    }
+  }
+}
+
+let resizeObserver: ResizeObserver | null = null
+
 onMounted(async () => {
   try {
     const res = await getRanks()
-    // 展开所有 tier 中的 agents 到一个扁平列表
     const agents: any[] = []
     for (const tier of res.data.tiers) {
       for (const a of tier.agents) {
@@ -82,6 +152,17 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  await nextTick()
+  updateContainerSize()
+  if (containerRef.value) {
+    resizeObserver = new ResizeObserver(updateContainerSize)
+    resizeObserver.observe(containerRef.value)
+  }
+})
+
+onUnmounted(() => {
+  resizeObserver?.disconnect()
 })
 </script>
 
@@ -101,8 +182,11 @@ onMounted(async () => {
       </div>
     </header>
 
-    <!-- 鸟瞰气泡图 -->
-    <div class="birdseye">
+    <div
+      ref="containerRef"
+      class="birdseye"
+      :style="{ height: containerHeight + 'px' }"
+    >
       <div
         v-for="b in bubbles"
         :key="b.instance_id + ':' + b.agent_id"
@@ -110,9 +194,10 @@ onMounted(async () => {
         :style="{
           width: b.size + 'px',
           height: b.size + 'px',
+          left: b.x + 'px',
+          top: b.y + 'px',
           borderColor: b.color,
-          backgroundImage: pixelBg(b.color),
-          backgroundColor: b.color + '0A',
+          backgroundColor: b.color + '12',
         }"
         @mouseenter="onBubbleEnter($event, b)"
         @mousemove="onBubbleMove"
@@ -127,7 +212,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- 悬浮详情卡 -->
     <Teleport to="body">
       <Transition name="tip">
         <div
@@ -135,7 +219,7 @@ onMounted(async () => {
           class="tooltip-card"
           :style="{ left: tooltipPos.x + 'px', top: tooltipPos.y + 'px' }"
         >
-          <div class="tip-header" :style="{ borderColor: hoveredAgent.color }">
+          <div class="tip-header" :style="{ borderBottomColor: hoveredAgent.color }">
             <span class="tip-rank">{{ hoveredAgent.rank_emoji }} {{ hoveredAgent.rank_name }}</span>
             <span class="tip-pos">#{{ hoveredAgent.position }}</span>
           </div>
@@ -190,38 +274,32 @@ onMounted(async () => {
 .total-label { color: var(--text-muted); }
 .total-value { font-weight: 700; color: var(--accent); }
 
-/* ===== 鸟瞰气泡图 ===== */
+/* ===== 鸟瞰图 ===== */
 .birdseye {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  padding: var(--space-8) var(--space-4);
-  min-height: 400px;
+  position: relative;
   background: var(--bg-surface);
   border: 2px solid var(--border);
-  position: relative;
+  overflow: hidden;
 }
 
 .bubble {
+  position: absolute;
   border-radius: 50%;
-  border: 3px solid;
+  border: 2px solid;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
   cursor: default;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-width 0.15s ease;
   overflow: hidden;
-  flex-shrink: 0;
 }
 
 .bubble:hover {
-  transform: scale(1.08);
-  box-shadow: 0 0 0 4px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.1);
+  transform: scale(1.06);
+  box-shadow: 0 0 20px rgba(0,0,0,0.08);
+  border-width: 3px;
   z-index: 2;
 }
 
@@ -230,24 +308,20 @@ onMounted(async () => {
   font-weight: 700;
   text-align: center;
   line-height: 1.2;
-  padding: 0 8px;
+  padding: 0 6px;
   max-width: 90%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  position: relative;
-  z-index: 1;
 }
 
 .bubble-tokens {
   font-family: var(--font-mono);
   font-weight: 600;
   color: var(--text-muted);
-  position: relative;
-  z-index: 1;
 }
 
-/* ===== 悬浮详情卡 ===== */
+/* ===== Tooltip ===== */
 .tooltip-card {
   position: fixed;
   z-index: 9999;
@@ -255,7 +329,6 @@ onMounted(async () => {
   background: var(--bg-surface);
   border: 2px solid var(--border-strong);
   box-shadow: 6px 6px 0 rgba(26, 26, 26, 0.08);
-  padding: 0;
   min-width: 200px;
   max-width: 280px;
 }
@@ -269,32 +342,17 @@ onMounted(async () => {
   border-bottom: 2px dashed var(--border);
 }
 
-.tip-rank {
-  font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.tip-pos {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
+.tip-rank { font-family: var(--font-body); font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.tip-pos { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--text-muted); }
 
 .tip-name {
   padding: var(--space-2) var(--space-3) 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-size: 14px; font-weight: 700; color: var(--text-primary);
 }
 
 .tip-instance {
   padding: 0 var(--space-3);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
 }
 
 .tip-grid {
@@ -322,6 +380,5 @@ onMounted(async () => {
 @media (max-width: 768px) {
   .page-header { flex-direction: column; }
   .page-title { font-size: 18px; }
-  .birdseye { padding: var(--space-4); gap: 8px; }
 }
 </style>

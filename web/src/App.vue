@@ -21,7 +21,7 @@ const navKeys = [
   { path: '/', key: 'nav.dashboard', icon: '▦' },
   { path: '/instances', key: 'nav.instances', icon: '▣' },
   { path: '/agents', key: 'nav.agents', icon: '◎' },
-  { path: '/ranks', key: 'nav.ranks', icon: '👑' },
+  { path: '/ranks', key: 'nav.ranks', icon: '◉' },
   { path: '/tokens', key: 'nav.tokens', icon: '◈' },
 ]
 

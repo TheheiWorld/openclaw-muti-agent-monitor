@@ -8,7 +8,7 @@ export default {
     dashboard: 'Dashboard',
     instances: '实例管理',
     agents: 'Agent 管理',
-    ranks: '官阶榜',
+    ranks: 'Agent 鸟瞰',
     tokens: 'Token 统计',
   },
   lang: {
@@ -133,11 +133,11 @@ export default {
 
   // Ranks
   ranks: {
-    title: '官阶榜',
-    desc: '以 Token 论功，封官拜爵',
+    title: 'Agent 鸟瞰',
+    desc: '按 Token 用量分布的全局视图',
     totalAgents: 'Agent 总数',
     sessions: '会话',
-    empty: '暂无 Agent 数据，尚无人入朝为官',
+    empty: '暂无 Agent 数据',
   },
 
   // Token Stats

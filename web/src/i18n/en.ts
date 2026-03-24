@@ -8,7 +8,7 @@ export default {
     dashboard: 'Dashboard',
     instances: 'Instances',
     agents: 'Agents',
-    ranks: 'Ranks',
+    ranks: 'Bird\'s Eye',
     tokens: 'Token Stats',
   },
   lang: {
@@ -133,11 +133,11 @@ export default {
 
   // Ranks
   ranks: {
-    title: 'Imperial Ranks',
-    desc: 'Ranked by token contribution, honored by service',
+    title: "Bird's Eye View",
+    desc: 'Agent distribution by token usage',
     totalAgents: 'Total Agents',
     sessions: 'sessions',
-    empty: 'No agents yet — the court awaits its ministers',
+    empty: 'No agent data',
   },
 
   // Token Stats
