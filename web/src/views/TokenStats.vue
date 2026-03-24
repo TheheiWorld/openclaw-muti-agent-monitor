@@ -99,7 +99,7 @@ const agentBarOption = () => ({
   },
   yAxis: {
     type: 'category',
-    data: summary.value.by_agent.slice(0, 10).map((a: any) => a.agent_id).reverse(),
+    data: summary.value.by_agent.slice(0, 10).map((a: any) => a.agent_name || a.agent_id).reverse(),
     axisLabel: { fontSize: 11, color: '#555', fontFamily: 'JetBrains Mono, monospace' },
     axisLine: { show: false },
     axisTick: { show: false },

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import TokenUsageHourly, Session, Instance
+from ..models import TokenUsageHourly, Session, Instance, Agent
 
 router = APIRouter(prefix="/api/tokens", tags=["tokens"], dependencies=[Depends(get_current_user)])
 
@@ -66,12 +66,18 @@ async def token_summary(db: AsyncSession = Depends(get_db)):
         .order_by(func.sum(Session.total_tokens).desc())
         .limit(20)
     )
-    by_agent = [{
-        "agent_id": row.agent_id,
-        "instance_id": row.instance_id,
-        "total_tokens": row.total_tokens or 0,
-        "estimated_cost_usd": round(row.cost or 0, 4),
-    } for row in by_agent_result.all()]
+    by_agent = []
+    for row in by_agent_result.all():
+        agent_name = (await db.execute(
+            select(Agent.name).where(Agent.instance_id == row.instance_id, Agent.agent_id == row.agent_id)
+        )).scalar() or row.agent_id
+        by_agent.append({
+            "agent_id": row.agent_id,
+            "agent_name": agent_name,
+            "instance_id": row.instance_id,
+            "total_tokens": row.total_tokens or 0,
+            "estimated_cost_usd": round(row.cost or 0, 4),
+        })
 
     return {
         "total_input_tokens": total.input,
