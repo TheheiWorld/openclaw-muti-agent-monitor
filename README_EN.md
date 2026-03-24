@@ -282,6 +282,19 @@ sudo systemctl status openclaw-monitor    # Status
 sudo journalctl -u openclaw-monitor -n 100 --no-pager  # Last 100 log lines
 ```
 
+#### 7. Update Deployment
+
+After code changes, use the deployment script to redeploy:
+
+```bash
+cd /path/to/openclaw-muti-agent-monitor
+sudo bash deploy/update-server.sh
+```
+
+The script automatically: pulls latest code → syncs files → updates dependencies → runs db migration → restarts the service.
+
+> The script uses rsync to sync files and automatically skips database files (`*.db`), env files (`.env`), and collector local config, so runtime data is not affected.
+
 ### Collector Deployment (systemd)
 
 On each OpenClaw instance machine:

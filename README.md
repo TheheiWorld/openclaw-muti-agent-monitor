@@ -282,6 +282,19 @@ sudo systemctl status openclaw-monitor    # 状态
 sudo journalctl -u openclaw-monitor -n 100 --no-pager  # 最近 100 行日志
 ```
 
+#### 7. 更新部署
+
+代码更新后，使用一键部署脚本重新部署：
+
+```bash
+cd /path/to/openclaw-muti-agent-monitor
+sudo bash deploy/update-server.sh
+```
+
+脚本会自动完成：拉取最新代码 → 同步文件 → 更新依赖 → 数据库迁移 → 重启服务。
+
+> 脚本通过 rsync 同步文件，会自动跳过数据库文件（`*.db`）、环境变量文件（`.env`）和采集器本地配置，不会影响运行时数据。
+
 ### 采集器部署（systemd）
 
 在每台 OpenClaw 实例机器上：
