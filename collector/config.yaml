@@ -18,3 +18,9 @@ openclaw_port: 18789
 
 # OpenClaw CLI 路径
 openclaw_bin: "openclaw"
+
+# OpenClaw 数据目录所属用户的 HOME 路径
+# 当采集器以其他用户运行时，需指定运行 OpenClaw 的用户 HOME 目录
+# 例如 OpenClaw 以 root 运行，则填 /root
+# 留空则使用当前用户的 HOME
+openclaw_home: ""

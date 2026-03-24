@@ -65,12 +65,12 @@ def check_health(host: str, port: int) -> dict:
     return result
 
 
-def run_cli_command(openclaw_bin: str, args: list[str], timeout: int = 30) -> str | None:
+def run_cli_command(openclaw_bin: str, args: list[str], timeout: int = 30, env: dict | None = None) -> str | None:
     """执行 OpenClaw CLI 命令并返回 stdout"""
     cmd = [openclaw_bin] + args
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
+            cmd, capture_output=True, text=True, timeout=timeout, env=env,
         )
         if result.returncode != 0:
             logger.warning(f"CLI command failed: {' '.join(cmd)}\nstderr: {result.stderr[:500]}")
@@ -87,7 +87,7 @@ def run_cli_command(openclaw_bin: str, args: list[str], timeout: int = 30) -> st
         return None
 
 
-def collect_sessions(openclaw_bin: str) -> list[dict]:
+def collect_sessions(openclaw_bin: str, env: dict | None = None) -> list[dict]:
     """采集会话数据 (含 Token 统计)
 
     openclaw sessions --json 可能输出：
@@ -95,12 +95,10 @@ def collect_sessions(openclaw_bin: str) -> list[dict]:
     - 多个 JSON 对象拼接 (多 agent store 时每个 store 输出一个 JSON 块)
     - JSON 块之间或末尾可能混入非 JSON 文本 (CLI log/warning 等)
     """
-    output = run_cli_command(openclaw_bin, ["sessions", "--json"], timeout=120)
+    output = run_cli_command(openclaw_bin, ["sessions", "--json"], timeout=120, env=env)
     if not output:
         logger.info("Sessions command returned no output")
         return []
-
-    logger.debug(f"Sessions raw output ({len(output)} bytes): {output[:500]!r}")
 
     all_sessions = []
 
@@ -150,18 +148,18 @@ def collect_sessions(openclaw_bin: str) -> list[dict]:
     if all_sessions:
         logger.info(f"Collected {len(all_sessions)} sessions")
     else:
-        logger.warning(f"No sessions parsed from output ({len(output)} bytes)")
+        logger.warning(f"No sessions parsed from output ({len(output)} bytes): {output[:500]!r}")
     return all_sessions
 
 
-def collect_agents(openclaw_bin: str) -> list[dict]:
+def collect_agents(openclaw_bin: str, env: dict | None = None) -> list[dict]:
     """采集 Agent 列表
 
     使用 `openclaw agents list --json`，返回 AgentSummary[] 数组，
     包含 id, name, isDefault, identityEmoji, identityName 等字段。
     输出可能包含多个 JSON 块拼接或混入非 JSON 文本。
     """
-    output = run_cli_command(openclaw_bin, ["agents", "list", "--json"])
+    output = run_cli_command(openclaw_bin, ["agents", "list", "--json"], env=env)
     if not output:
         logger.info("Agents command returned no output")
         return []
@@ -204,9 +202,9 @@ def collect_agents(openclaw_bin: str) -> list[dict]:
     return all_agents
 
 
-def collect_version(openclaw_bin: str) -> str:
+def collect_version(openclaw_bin: str, env: dict | None = None) -> str:
     """获取 OpenClaw 版本"""
-    output = run_cli_command(openclaw_bin, ["--version"], timeout=10)
+    output = run_cli_command(openclaw_bin, ["--version"], timeout=10, env=env)
     if output:
         return output.strip().split("\n")[0].strip()
     return ""
@@ -218,10 +216,17 @@ def build_heartbeat(config: dict, instance_id: str) -> dict:
     port = config["openclaw_port"]
     openclaw_bin = config["openclaw_bin"]
 
+    # 构造子进程环境变量，指定 HOME 目录使 openclaw CLI 读取正确的数据
+    cli_env = None
+    openclaw_home = config.get("openclaw_home", "")
+    if openclaw_home:
+        cli_env = os.environ.copy()
+        cli_env["HOME"] = openclaw_home
+
     health = check_health(host, port)
-    sessions_raw = collect_sessions(openclaw_bin) if health["live"] else []
-    agents_raw = collect_agents(openclaw_bin) if health["live"] else []
-    version = collect_version(openclaw_bin) if health["live"] else ""
+    sessions_raw = collect_sessions(openclaw_bin, env=cli_env) if health["live"] else []
+    agents_raw = collect_agents(openclaw_bin, env=cli_env) if health["live"] else []
+    version = collect_version(openclaw_bin, env=cli_env) if health["live"] else ""
 
     # 规范化 agent 数据
     # openclaw agents list --json 返回字段:
