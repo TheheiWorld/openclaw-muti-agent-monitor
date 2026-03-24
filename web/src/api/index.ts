@@ -55,6 +55,9 @@ export const deleteAgent = (agentId: string, instanceId: string) =>
 export const getAgents = (params?: { instance_id?: string }) =>
   api.get('/agents', { params })
 
+export const getAgent = (agentId: string, instanceId: string) =>
+  api.get(`/agents/${agentId}`, { params: { instance_id: instanceId } })
+
 export const getAgentSessions = (agentId: string, params?: { instance_id?: string }) =>
   api.get(`/agents/${agentId}/sessions`, { params })
 

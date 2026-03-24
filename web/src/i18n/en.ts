@@ -77,6 +77,24 @@ export default {
     empty: 'No agent data',
   },
 
+  // Agent Detail
+  agentDetail: {
+    infoTitle: 'Basic Info',
+    fieldId: 'Agent ID',
+    fieldName: 'Name',
+    fieldInstance: 'Instance',
+    fieldStatus: 'Status',
+    fieldSessions: 'Sessions',
+    fieldTokens: 'Total Tokens',
+    fieldCost: 'Cost (USD)',
+    fieldUpdated: 'Last Updated',
+    sessionTitle: 'Sessions',
+    noSessions: 'No session data',
+    delete: 'Delete Agent',
+    deleteConfirm: 'Delete agent "{name}" and all associated data? This cannot be undone.',
+    deleteSuccess: 'Agent deleted',
+  },
+
   // Instance Detail
   detail: {
     back: 'Back',

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getAgents, deleteAgent } from '../api'
 import { useI18n } from '../i18n'
 import StatusBadge from '../components/StatusBadge.vue'
 
+const router = useRouter()
 const { t } = useI18n()
 const loading = ref(true)
 const agents = ref<any[]>([])
@@ -57,6 +59,10 @@ const handleDelete = async (row: any) => {
   }
 }
 
+const handleRowClick = (row: any) => {
+  router.push({ path: `/agents/${row.agent_id}`, query: { instance_id: row.instance_id } })
+}
+
 onMounted(fetchData)
 watch(statusFilter, fetchData)
 </script>
@@ -101,7 +107,14 @@ watch(statusFilter, fetchData)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in agents" :key="row.instance_id + ':' + row.agent_id">
+          <tr
+            v-for="row in agents"
+            :key="row.instance_id + ':' + row.agent_id"
+            tabindex="0"
+            role="link"
+            @click="handleRowClick(row)"
+            @keydown.enter="handleRowClick(row)"
+          >
             <td class="cell-name">
               <span v-if="row.identity_emoji" aria-hidden="true">{{ row.identity_emoji }} </span>
               {{ row.name || row.agent_id }}
@@ -200,12 +213,15 @@ watch(statusFilter, fetchData)
 .data-table th.right { text-align: right; }
 
 .data-table tbody tr {
+  cursor: pointer;
   transition: all var(--duration-fast) ease;
   border-bottom: 1px dashed var(--border);
 }
 
 .data-table tbody tr:last-child { border-bottom: none; }
-.data-table tbody tr:hover { background: var(--bg-hover); }
+.data-table tbody tr:hover, .data-table tbody tr:focus-visible { background: var(--bg-hover); }
+.data-table tbody tr:hover .cell-name { color: var(--accent); }
+.data-table tbody tr:active { background: var(--bg-active); }
 
 .data-table td { padding: var(--space-3) var(--space-4); font-size: 13px; color: var(--text-primary); vertical-align: middle; }
 .data-table td.center { text-align: center; }

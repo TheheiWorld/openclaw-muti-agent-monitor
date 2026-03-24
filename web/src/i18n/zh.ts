@@ -77,6 +77,24 @@ export default {
     empty: '暂无 Agent 数据',
   },
 
+  // Agent Detail
+  agentDetail: {
+    infoTitle: '基本信息',
+    fieldId: 'Agent ID',
+    fieldName: '名称',
+    fieldInstance: '所属实例',
+    fieldStatus: '状态',
+    fieldSessions: '会话数',
+    fieldTokens: 'Token 总量',
+    fieldCost: '费用 (USD)',
+    fieldUpdated: '最后更新',
+    sessionTitle: '关联会话',
+    noSessions: '暂无会话数据',
+    delete: '删除 Agent',
+    deleteConfirm: '确定删除 Agent "{name}" 及其所有关联数据？此操作不可恢复。',
+    deleteSuccess: 'Agent 已删除',
+  },
+
   // Instance Detail
   detail: {
     back: '返回',

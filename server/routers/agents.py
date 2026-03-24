@@ -65,6 +65,47 @@ async def list_agents(instance_id: str | None = None, db: AsyncSession = Depends
     return {"items": items, "total": len(items)}
 
 
+@router.get("/{agent_id}")
+async def get_agent(agent_id: str, instance_id: str, db: AsyncSession = Depends(get_db)):
+    """获取单个 Agent 详情"""
+    result = await db.execute(
+        select(Agent).where(Agent.instance_id == instance_id, Agent.agent_id == agent_id)
+    )
+    ag = result.scalar_one_or_none()
+    if not ag:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    inst_name = (await db.execute(
+        select(Instance.name).where(Instance.instance_id == ag.instance_id)
+    )).scalar() or ag.instance_id
+
+    sess_stats = (await db.execute(
+        select(
+            func.count().label("session_count"),
+            func.coalesce(func.sum(Session.total_tokens), 0).label("total_tokens"),
+            func.coalesce(func.sum(Session.input_tokens), 0).label("input_tokens"),
+            func.coalesce(func.sum(Session.output_tokens), 0).label("output_tokens"),
+            func.coalesce(func.sum(Session.estimated_cost_usd), 0).label("cost"),
+        ).where(Session.instance_id == ag.instance_id, Session.agent_id == ag.agent_id)
+    )).one()
+
+    return {
+        "agent_id": ag.agent_id,
+        "instance_id": ag.instance_id,
+        "instance_name": inst_name,
+        "name": ag.name,
+        "identity_emoji": ag.identity_emoji,
+        "identity_theme": ag.identity_theme,
+        "status": _agent_status(ag.updated_at),
+        "session_count": sess_stats.session_count,
+        "total_tokens": sess_stats.total_tokens,
+        "input_tokens": sess_stats.input_tokens,
+        "output_tokens": sess_stats.output_tokens,
+        "estimated_cost_usd": round(sess_stats.cost, 4),
+        "updated_at": ag.updated_at.isoformat() if ag.updated_at else None,
+    }
+
+
 @router.get("/{agent_id}/sessions")
 async def get_agent_sessions(
     agent_id: str,
