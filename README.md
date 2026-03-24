@@ -246,7 +246,14 @@ sudo -u openclaw-monitor bash -c 'set -a; source .env; set +a; venv/bin/python -
 
 该命令会创建所有数据库表并生成默认用户 `monitor`，密码打印在控制台输出中，请妥善保存。
 
-> 如果跳过此步骤，服务首次启动时也会自动初始化数据库，密码会输出到 journalctl 日志中。
+如需重置 `monitor` 用户密码：
+
+```bash
+cd /opt/openclaw-monitor
+sudo -u openclaw-monitor bash -c 'set -a; source .env; set +a; venv/bin/python -m server.init_db --reset-password'
+```
+
+> 如果跳过初始化步骤，服务首次启动时也会自动初始化数据库，密码会输出到 journalctl 日志中。
 
 #### 5. 安装并启动 systemd 服务
 

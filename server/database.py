@@ -51,6 +51,8 @@ async def _ensure_default_user():
     async with async_session() as session:
         result = await session.execute(select(User).where(User.username == "monitor"))
         if result.scalar_one_or_none() is not None:
+            logger.info("Default user 'monitor' already exists, skipping creation.")
+            print("Default user 'monitor' already exists.")
             return
 
         password = secrets.token_urlsafe(12)
@@ -58,15 +60,39 @@ async def _ensure_default_user():
         session.add(User(username="monitor", hashed_password=hashed))
         await session.commit()
 
-        print("\n" + "=" * 60)
-        print("  OpenClaw Monitor - 初始化完成")
-        print()
-        print(f"  用户名: monitor")
-        print(f"  密码:   {password}")
-        print()
-        print("  请登录后尽快修改密码。")
-        print("=" * 60 + "\n")
+        _print_credentials("monitor", password)
         logger.info("Default user 'monitor' created.")
+
+
+async def reset_default_password():
+    """重置 monitor 用户密码"""
+    from passlib.hash import bcrypt
+
+    async with async_session() as session:
+        result = await session.execute(select(User).where(User.username == "monitor"))
+        user = result.scalar_one_or_none()
+        if user is None:
+            print("User 'monitor' not found, creating...")
+            await _ensure_default_user()
+            return
+
+        password = secrets.token_urlsafe(12)
+        user.hashed_password = bcrypt.hash(password)
+        await session.commit()
+
+        _print_credentials("monitor", password)
+        logger.info("Password for 'monitor' has been reset.")
+
+
+def _print_credentials(username: str, password: str):
+    print("\n" + "=" * 60)
+    print("  OpenClaw Monitor - 初始化完成")
+    print()
+    print(f"  用户名: {username}")
+    print(f"  密码:   {password}")
+    print()
+    print("  请登录后尽快修改密码。")
+    print("=" * 60 + "\n")
 
 
 async def get_db() -> AsyncSession:
