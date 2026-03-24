@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenClaw Monitor Server
+After=network.target
+
+[Service]
+Type=simple
+User=openclaw-monitor
+Group=openclaw-monitor
+WorkingDirectory=/opt/openclaw-monitor
+ExecStart=/opt/openclaw-monitor/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 9200
+Restart=always
+RestartSec=5
+
+# 环境变量配置
+EnvironmentFile=/opt/openclaw-monitor/.env
+
+# 安全加固
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

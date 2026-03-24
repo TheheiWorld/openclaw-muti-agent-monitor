@@ -188,41 +188,124 @@ server {
 }
 ```
 
-### Backend Production Deployment
+### Backend Deployment (systemd)
+
+#### 1. Prepare the Server
 
 ```bash
-cd server
-pip install -r requirements.txt
-uvicorn server.main:app --host 0.0.0.0 --port 9200
+# Create a system user
+sudo useradd -r -s /sbin/nologin openclaw-monitor
+
+# Create the deployment directory
+sudo mkdir -p /opt/openclaw-monitor
+sudo chown openclaw-monitor:openclaw-monitor /opt/openclaw-monitor
 ```
 
-Use systemd or supervisor to manage the backend process for continuous uptime.
+#### 2. Deploy the Code
 
-### Collector Production Deployment
+```bash
+# Copy the project to the deployment directory
+sudo cp -r server/ collector/ /opt/openclaw-monitor/
+sudo chown -R openclaw-monitor:openclaw-monitor /opt/openclaw-monitor
+
+# Create a Python virtual environment and install dependencies
+sudo -u openclaw-monitor python3 -m venv /opt/openclaw-monitor/venv
+sudo -u openclaw-monitor /opt/openclaw-monitor/venv/bin/pip install -r /opt/openclaw-monitor/server/requirements.txt
+```
+
+#### 3. Configure Environment Variables
+
+```bash
+# Create environment file from template
+sudo cp deploy/env.example /opt/openclaw-monitor/.env
+
+# Generate and fill in secrets
+SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+COLLECTOR_API_KEY=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+
+sudo tee /opt/openclaw-monitor/.env > /dev/null <<EOF
+SECRET_KEY=${SECRET_KEY}
+COLLECTOR_API_KEY=${COLLECTOR_API_KEY}
+EOF
+
+sudo chown openclaw-monitor:openclaw-monitor /opt/openclaw-monitor/.env
+sudo chmod 600 /opt/openclaw-monitor/.env
+```
+
+#### 4. Install and Start the systemd Service
+
+```bash
+# Install the service file
+sudo cp deploy/openclaw-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# Enable and start
+sudo systemctl enable --now openclaw-monitor
+
+# Check status
+sudo systemctl status openclaw-monitor
+
+# View logs
+sudo journalctl -u openclaw-monitor -f
+```
+
+#### 5. Common Operations
+
+```bash
+sudo systemctl start openclaw-monitor     # Start
+sudo systemctl stop openclaw-monitor      # Stop
+sudo systemctl restart openclaw-monitor   # Restart
+sudo systemctl status openclaw-monitor    # Status
+sudo journalctl -u openclaw-monitor -n 100 --no-pager  # Last 100 log lines
+```
+
+On first startup, check the logs for the default `monitor` user password:
+
+```bash
+sudo journalctl -u openclaw-monitor | grep password
+```
+
+### Collector Deployment (systemd)
 
 On each OpenClaw instance machine:
 
-1. Copy the `collector/` directory to the target machine
-2. Update `server_url` in `config.yaml` to point to the monitor server
-3. Set `instance_name` to a unique identifier for this instance
-4. Use systemd or supervisor to manage the collector process
+#### 1. Deploy the Collector
 
-#### systemd Service Example (Collector)
+```bash
+# Create user and directory (reuse if already on the same machine as server)
+sudo useradd -r -s /sbin/nologin openclaw-monitor 2>/dev/null || true
+sudo mkdir -p /opt/openclaw-monitor
+sudo cp -r collector/ /opt/openclaw-monitor/
+sudo chown -R openclaw-monitor:openclaw-monitor /opt/openclaw-monitor
 
-```ini
-[Unit]
-Description=OpenClaw Monitor Collector
-After=network.target
+# Install dependencies (reuse venv if it already exists)
+sudo -u openclaw-monitor python3 -m venv /opt/openclaw-monitor/venv 2>/dev/null || true
+sudo -u openclaw-monitor /opt/openclaw-monitor/venv/bin/pip install -r /opt/openclaw-monitor/collector/requirements.txt
+```
 
-[Service]
-Type=simple
-WorkingDirectory=/opt/openclaw-monitor/collector
-ExecStart=/usr/bin/python3 collector.py
-Restart=always
-RestartSec=10
+#### 2. Update Configuration
 
-[Install]
-WantedBy=multi-user.target
+Edit `/opt/openclaw-monitor/collector/config.yaml`:
+
+```yaml
+server_url: "http://<monitor-server-ip>:9200"   # Point to the monitor server
+api_key: "your-collector-api-key"                # Must match server's COLLECTOR_API_KEY
+instance_name: "prod-01"                         # Unique identifier for this instance
+collect_interval: 60
+openclaw_host: "127.0.0.1"
+openclaw_port: 18789
+openclaw_bin: "openclaw"
+```
+
+#### 3. Install and Start the Service
+
+```bash
+sudo cp deploy/openclaw-collector.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now openclaw-collector
+
+# View logs
+sudo journalctl -u openclaw-collector -f
 ```
 
 ## Database

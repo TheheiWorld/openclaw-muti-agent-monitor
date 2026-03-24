@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenClaw Monitor Collector
+After=network.target
+
+[Service]
+Type=simple
+User=openclaw-monitor
+Group=openclaw-monitor
+WorkingDirectory=/opt/openclaw-monitor/collector
+ExecStart=/opt/openclaw-monitor/venv/bin/python collector.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

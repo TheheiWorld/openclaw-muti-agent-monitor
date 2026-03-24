@@ -188,42 +188,124 @@ server {
 }
 ```
 
-### 后端生产部署
+### 后端服务部署（systemd）
+
+#### 1. 准备服务器环境
 
 ```bash
-cd server
-pip install -r requirements.txt
-# 使用 uvicorn 直接启动
-uvicorn server.main:app --host 0.0.0.0 --port 9200
+# 创建系统用户
+sudo useradd -r -s /sbin/nologin openclaw-monitor
+
+# 创建部署目录
+sudo mkdir -p /opt/openclaw-monitor
+sudo chown openclaw-monitor:openclaw-monitor /opt/openclaw-monitor
 ```
 
-建议使用 systemd 或 supervisor 管理后端进程，确保服务持续运行。
+#### 2. 部署代码
 
-### 采集器生产部署
+```bash
+# 拷贝项目到部署目录
+sudo cp -r server/ collector/ /opt/openclaw-monitor/
+sudo chown -R openclaw-monitor:openclaw-monitor /opt/openclaw-monitor
+
+# 创建 Python 虚拟环境并安装依赖
+sudo -u openclaw-monitor python3 -m venv /opt/openclaw-monitor/venv
+sudo -u openclaw-monitor /opt/openclaw-monitor/venv/bin/pip install -r /opt/openclaw-monitor/server/requirements.txt
+```
+
+#### 3. 配置环境变量
+
+```bash
+# 从模板创建环境变量文件
+sudo cp deploy/env.example /opt/openclaw-monitor/.env
+
+# 生成并填写密钥
+SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+COLLECTOR_API_KEY=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+
+sudo tee /opt/openclaw-monitor/.env > /dev/null <<EOF
+SECRET_KEY=${SECRET_KEY}
+COLLECTOR_API_KEY=${COLLECTOR_API_KEY}
+EOF
+
+sudo chown openclaw-monitor:openclaw-monitor /opt/openclaw-monitor/.env
+sudo chmod 600 /opt/openclaw-monitor/.env
+```
+
+#### 4. 安装并启动 systemd 服务
+
+```bash
+# 安装服务文件
+sudo cp deploy/openclaw-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# 启动并设置开机自启
+sudo systemctl enable --now openclaw-monitor
+
+# 查看状态
+sudo systemctl status openclaw-monitor
+
+# 查看日志
+sudo journalctl -u openclaw-monitor -f
+```
+
+#### 5. 常用运维命令
+
+```bash
+sudo systemctl start openclaw-monitor     # 启动
+sudo systemctl stop openclaw-monitor      # 停止
+sudo systemctl restart openclaw-monitor   # 重启
+sudo systemctl status openclaw-monitor    # 状态
+sudo journalctl -u openclaw-monitor -n 100 --no-pager  # 最近 100 行日志
+```
+
+首次启动后查看日志获取默认用户 `monitor` 的密码：
+
+```bash
+sudo journalctl -u openclaw-monitor | grep password
+```
+
+### 采集器部署（systemd）
 
 在每台 OpenClaw 实例机器上：
 
-1. 拷贝 `collector/` 目录到目标机器
-2. 修改 `config.yaml` 中的 `server_url` 指向监控服务端
-3. 修改 `instance_name` 为当前实例的唯一标识
-4. 使用 systemd 或 supervisor 管理采集器进程
+#### 1. 部署采集器
 
-#### systemd 服务示例（采集器）
+```bash
+# 创建用户和目录（如果与 server 同机器则复用）
+sudo useradd -r -s /sbin/nologin openclaw-monitor 2>/dev/null || true
+sudo mkdir -p /opt/openclaw-monitor
+sudo cp -r collector/ /opt/openclaw-monitor/
+sudo chown -R openclaw-monitor:openclaw-monitor /opt/openclaw-monitor
 
-```ini
-[Unit]
-Description=OpenClaw Monitor Collector
-After=network.target
+# 安装依赖（如果虚拟环境已存在则复用）
+sudo -u openclaw-monitor python3 -m venv /opt/openclaw-monitor/venv 2>/dev/null || true
+sudo -u openclaw-monitor /opt/openclaw-monitor/venv/bin/pip install -r /opt/openclaw-monitor/collector/requirements.txt
+```
 
-[Service]
-Type=simple
-WorkingDirectory=/opt/openclaw-monitor/collector
-ExecStart=/usr/bin/python3 collector.py
-Restart=always
-RestartSec=10
+#### 2. 修改配置
 
-[Install]
-WantedBy=multi-user.target
+编辑 `/opt/openclaw-monitor/collector/config.yaml`：
+
+```yaml
+server_url: "http://<monitor-server-ip>:9200"   # 指向监控服务端
+api_key: "your-collector-api-key"                # 与服务端 COLLECTOR_API_KEY 一致
+instance_name: "prod-01"                         # 当前实例唯一标识
+collect_interval: 60
+openclaw_host: "127.0.0.1"
+openclaw_port: 18789
+openclaw_bin: "openclaw"
+```
+
+#### 3. 安装并启动服务
+
+```bash
+sudo cp deploy/openclaw-collector.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now openclaw-collector
+
+# 查看日志
+sudo journalctl -u openclaw-collector -f
 ```
 
 ## 数据库
