@@ -128,7 +128,7 @@ watch(statusFilter, fetchData)
               <button
                 v-if="row.status === 'offline'"
                 class="delete-btn"
-                @click="handleDelete($event, row)"
+                @click.stop="handleDelete($event, row)"
               >{{ t('instances.delete') }}</button>
               <span v-else class="cell-mono">-</span>
             </td>
