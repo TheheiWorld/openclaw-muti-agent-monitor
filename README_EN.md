@@ -76,10 +76,15 @@ The project consists of three components:
 ```bash
 cd server
 pip install -r requirements.txt
+
+# Initialize the database (create tables + default user, password printed to console)
+python init_db.py
+
+# Start the server
 python run.py
 ```
 
-The server starts at `http://localhost:9200`. On the first run, it automatically creates the database and generates a default user `monitor` — the password is printed in the console log.
+The server starts at `http://localhost:9200`. If you skip `init_db.py`, the database will be initialized automatically on first startup.
 
 ### 2. Start the Frontend
 
@@ -232,7 +237,18 @@ sudo chown openclaw-monitor:openclaw-monitor /opt/openclaw-monitor/.env
 sudo chmod 600 /opt/openclaw-monitor/.env
 ```
 
-#### 4. Install and Start the systemd Service
+#### 4. Initialize the Database
+
+```bash
+cd /opt/openclaw-monitor
+sudo -u openclaw-monitor bash -c 'set -a; source .env; set +a; venv/bin/python -m server.init_db'
+```
+
+This creates all database tables and generates a default user `monitor` — the password is printed to the console. Save it securely.
+
+> If you skip this step, the database will be initialized automatically on first service startup. The password will appear in the journalctl logs.
+
+#### 5. Install and Start the systemd Service
 
 ```bash
 # Install the service file
@@ -249,7 +265,7 @@ sudo systemctl status openclaw-monitor
 sudo journalctl -u openclaw-monitor -f
 ```
 
-#### 5. Common Operations
+#### 6. Common Operations
 
 ```bash
 sudo systemctl start openclaw-monitor     # Start
@@ -257,12 +273,6 @@ sudo systemctl stop openclaw-monitor      # Stop
 sudo systemctl restart openclaw-monitor   # Restart
 sudo systemctl status openclaw-monitor    # Status
 sudo journalctl -u openclaw-monitor -n 100 --no-pager  # Last 100 log lines
-```
-
-On first startup, check the logs for the default `monitor` user password:
-
-```bash
-sudo journalctl -u openclaw-monitor | grep password
 ```
 
 ### Collector Deployment (systemd)
