@@ -210,6 +210,24 @@ def collect_version(openclaw_bin: str, env: dict | None = None) -> str:
     return ""
 
 
+def _get_local_ip() -> str:
+    """获取本机局域网 IP（非 127.0.0.1）"""
+    try:
+        # 通过 UDP 连接外部地址来获取本机出口 IP，不会实际发送数据
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        pass
+    # fallback: gethostbyname
+    try:
+        return socket.gethostbyname(socket.gethostname())
+    except Exception:
+        return "127.0.0.1"
+
+
 def build_heartbeat(config: dict, instance_id: str) -> dict:
     """构建完整心跳数据"""
     host = config["openclaw_host"]
@@ -268,10 +286,7 @@ def build_heartbeat(config: dict, instance_id: str) -> dict:
     # 获取本机 IP
     machine_host = config.get("advertise_host", "")
     if not machine_host:
-        try:
-            machine_host = socket.gethostbyname(socket.gethostname())
-        except Exception:
-            machine_host = "127.0.0.1"
+        machine_host = _get_local_ip()
 
     # 获取机器名称
     try:

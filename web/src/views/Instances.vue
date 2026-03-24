@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getInstances } from '../api'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import { getInstances, deleteInstance } from '../api'
 import { useI18n } from '../i18n'
 import StatusBadge from '../components/StatusBadge.vue'
 
@@ -48,6 +49,20 @@ const handleRowKeydown = (e: KeyboardEvent, id: string) => {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(id) }
 }
 
+const handleDelete = async (e: Event, row: any) => {
+  e.stopPropagation()
+  const msg = t('instances.deleteConfirm').replace('{name}', row.name)
+  try {
+    await ElMessageBox.confirm(msg, { confirmButtonText: t('auth.confirm'), cancelButtonText: t('auth.cancel'), type: 'warning' })
+    await deleteInstance(row.instance_id)
+    ElMessage.success(t('instances.deleteSuccess'))
+    fetchData()
+  } catch (err: any) {
+    if (err === 'cancel') return
+    ElMessage.error(err?.response?.data?.detail || 'Delete failed')
+  }
+}
+
 onMounted(fetchData)
 watch(statusFilter, fetchData)
 </script>
@@ -89,6 +104,7 @@ watch(statusFilter, fetchData)
             <th scope="col" class="center">{{ t('instances.colAgentCount') }}</th>
             <th scope="col" class="right">{{ t('instances.colTokens') }}</th>
             <th scope="col">{{ t('instances.colHeartbeat') }}</th>
+            <th scope="col" class="center">{{ t('instances.colAction') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -108,6 +124,14 @@ watch(statusFilter, fetchData)
             <td class="center cell-mono">{{ row.agent_count }}</td>
             <td class="right cell-mono">{{ formatTokens(row.total_tokens) }}</td>
             <td class="cell-time">{{ formatTime(row.last_heartbeat) }}</td>
+            <td class="center">
+              <button
+                v-if="row.status === 'offline'"
+                class="delete-btn"
+                @click="handleDelete($event, row)"
+              >{{ t('instances.delete') }}</button>
+              <span v-else class="cell-mono">-</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -205,6 +229,19 @@ watch(statusFilter, fetchData)
 .cell-name { font-weight: 600; transition: color var(--duration-fast) ease; }
 .cell-mono { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
 .cell-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+.delete-btn {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--red);
+  background: transparent;
+  color: var(--red);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
+}
+.delete-btn:hover { background: var(--red); color: white; }
 
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-16) var(--space-4); color: var(--text-muted); font-size: 13px; }
 .empty-pixel { font-size: 32px; opacity: 0.3; }

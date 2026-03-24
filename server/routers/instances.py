@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Instance, Agent, Session
+from ..models import Instance, Agent, Session, TokenUsageHourly
 
 router = APIRouter(prefix="/api/instances", tags=["instances"], dependencies=[Depends(get_current_user)])
 
@@ -125,3 +125,25 @@ async def get_instance(instance_id: str, db: AsyncSession = Depends(get_db)):
         "agents": agent_items,
         "sessions": session_items,
     }
+
+
+@router.delete("/{instance_id}")
+async def delete_instance(instance_id: str, db: AsyncSession = Depends(get_db)):
+    """删除离线实例及其关联数据（仅允许删除 offline 状态的实例）"""
+    result = await db.execute(
+        select(Instance).where(Instance.instance_id == instance_id)
+    )
+    inst = result.scalar_one_or_none()
+    if not inst:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    if inst.status != "offline":
+        raise HTTPException(status_code=400, detail="Only offline instances can be deleted")
+
+    # 删除关联数据
+    await db.execute(delete(TokenUsageHourly).where(TokenUsageHourly.instance_id == instance_id))
+    await db.execute(delete(Session).where(Session.instance_id == instance_id))
+    await db.execute(delete(Agent).where(Agent.instance_id == instance_id))
+    await db.execute(delete(Instance).where(Instance.instance_id == instance_id))
+    await db.commit()
+
+    return {"ok": True}

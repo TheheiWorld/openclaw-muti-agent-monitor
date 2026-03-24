@@ -45,6 +45,9 @@ export const getInstances = (params?: { status?: string }) =>
 export const getInstance = (instanceId: string) =>
   api.get(`/instances/${instanceId}`)
 
+export const deleteInstance = (instanceId: string) =>
+  api.delete(`/instances/${instanceId}`)
+
 // Agents
 export const getAgents = (params?: { instance_id?: string }) =>
   api.get('/agents', { params })
