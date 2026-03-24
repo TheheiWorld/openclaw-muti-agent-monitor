@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Agent, Session
+from ..models import Agent, Session, Instance
 
 router = APIRouter(prefix="/api/ranks", tags=["ranks"], dependencies=[Depends(get_current_user)])
 
@@ -66,12 +66,18 @@ async def get_ranks(db: AsyncSession = Depends(get_db)):
         agent_name = (agent_info.name if agent_info else None) or row.agent_id
         agent_emoji = (agent_info.identity_emoji if agent_info else None) or ""
 
+        # 获取实例名称
+        instance_name = (await db.execute(
+            select(Instance.name).where(Instance.instance_id == row.instance_id)
+        )).scalar() or row.instance_id
+
         rank = _assign_rank(idx + 1)
         agents.append({
             **rank,
             "position": idx + 1,
             "agent_id": row.agent_id,
             "instance_id": row.instance_id,
+            "instance_name": instance_name,
             "agent_name": agent_name,
             "agent_emoji": agent_emoji,
             "total_tokens": row.total_tokens or 0,
