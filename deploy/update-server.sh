@@ -67,8 +67,29 @@ fi
 info "同步 deploy 文件..."
 rsync -a "${SOURCE_DIR}/deploy/" "${DEPLOY_DIR}/deploy/"
 
+# 2.5 构建前端
+if [[ -d "${SOURCE_DIR}/web" ]]; then
+    if command -v node &>/dev/null && [[ -f "${SOURCE_DIR}/web/package.json" ]]; then
+        info "构建前端..."
+        cd "${SOURCE_DIR}/web"
+        npm install --silent 2>/dev/null
+        npm run build
+        info "同步前端产物..."
+        mkdir -p "${DEPLOY_DIR}/web/dist"
+        rsync -a --delete "${SOURCE_DIR}/web/dist/" "${DEPLOY_DIR}/web/dist/"
+    else
+        warn "未找到 Node.js 或 package.json，跳过前端构建"
+        # 如果源码中已有 dist，直接同步
+        if [[ -d "${SOURCE_DIR}/web/dist" ]]; then
+            mkdir -p "${DEPLOY_DIR}/web/dist"
+            rsync -a --delete "${SOURCE_DIR}/web/dist/" "${DEPLOY_DIR}/web/dist/"
+        fi
+    fi
+fi
+
 # 3. 修复文件权限
 chown -R "${USER}:${USER}" "${DEPLOY_DIR}/server" "${DEPLOY_DIR}/collector" "${DEPLOY_DIR}/deploy"
+[[ -d "${DEPLOY_DIR}/web" ]] && chown -R "${USER}:${USER}" "${DEPLOY_DIR}/web"
 
 # 4. 更新 Python 依赖
 info "更新 Python 依赖..."

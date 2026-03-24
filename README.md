@@ -175,7 +175,7 @@ server {
 
     # 前端静态文件
     location / {
-        root /path/to/web/dist;
+        root /opt/openclaw-monitor/web/dist;
         try_files $uri $uri/ /index.html;
     }
 
