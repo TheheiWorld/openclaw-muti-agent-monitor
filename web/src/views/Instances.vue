@@ -144,7 +144,7 @@ watch(statusFilter, fetchData)
 </template>
 
 <style scoped>
-.instances-page { max-width: 1200px; }
+.instances-page { }
 
 .page-header {
   display: flex;

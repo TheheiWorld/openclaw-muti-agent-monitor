@@ -409,6 +409,121 @@ html, body {
   stroke: var(--accent) !important;
 }
 
+/* Element Plus MessageBox override — pixel-art style */
+.el-overlay {
+  background-color: rgba(26, 26, 26, 0.4) !important;
+}
+.el-message-box {
+  border: 2px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  background: var(--bg-surface) !important;
+  box-shadow: 6px 6px 0 rgba(26, 26, 26, 0.08) !important;
+  max-width: 420px !important;
+  width: 90vw !important;
+}
+.el-message-box__header {
+  background: var(--bg-elevated) !important;
+  border-bottom: 2px dashed var(--border) !important;
+  padding: var(--space-3) var(--space-4) !important;
+}
+.el-message-box__title {
+  font-family: var(--font-body) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+.el-message-box__headerbtn {
+  top: 12px !important;
+  right: 12px !important;
+  width: 24px !important;
+  height: 24px !important;
+  font-size: 14px !important;
+}
+.el-message-box__headerbtn .el-message-box__close {
+  color: var(--text-muted) !important;
+}
+.el-message-box__headerbtn:hover .el-message-box__close {
+  color: var(--accent) !important;
+}
+.el-message-box__content {
+  padding: var(--space-4) !important;
+  font-family: var(--font-body) !important;
+  font-size: 13px !important;
+  color: var(--text-secondary) !important;
+}
+.el-message-box__status {
+  font-size: 20px !important;
+}
+.el-message-box__status.el-icon--warning {
+  color: var(--amber) !important;
+}
+.el-message-box__btns {
+  padding: 0 var(--space-4) var(--space-4) !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: var(--space-2) !important;
+}
+.el-message-box__btns .el-button {
+  border-radius: 0 !important;
+  font-family: var(--font-body) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: var(--space-2) var(--space-4) !important;
+  border: 2px solid var(--border) !important;
+  background: var(--bg-surface) !important;
+  color: var(--text-secondary) !important;
+  transition: all var(--duration-fast) ease !important;
+}
+.el-message-box__btns .el-button:hover {
+  color: var(--text-primary) !important;
+  border-color: var(--border-strong) !important;
+  background: var(--bg-hover) !important;
+}
+.el-message-box__btns .el-button--primary {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: white !important;
+}
+.el-message-box__btns .el-button--primary:hover {
+  background: #C01620 !important;
+  border-color: #C01620 !important;
+  color: white !important;
+}
+
+/* Element Plus Message override — pixel-art style */
+.el-message {
+  border: 2px solid var(--border-strong) !important;
+  border-radius: 0 !important;
+  background: var(--bg-surface) !important;
+  box-shadow: 4px 4px 0 rgba(26, 26, 26, 0.06) !important;
+  padding: var(--space-2) var(--space-4) !important;
+}
+.el-message .el-message__content {
+  font-family: var(--font-body) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+}
+.el-message--success {
+  border-color: var(--green) !important;
+}
+.el-message--success .el-message__icon {
+  color: var(--green) !important;
+}
+.el-message--error {
+  border-color: var(--red) !important;
+}
+.el-message--error .el-message__icon {
+  color: var(--red) !important;
+}
+.el-message--warning {
+  border-color: var(--amber) !important;
+}
+.el-message--warning .el-message__icon {
+  color: var(--amber) !important;
+}
+
 /* Transitions */
 .page-enter-active,
 .page-leave-active {

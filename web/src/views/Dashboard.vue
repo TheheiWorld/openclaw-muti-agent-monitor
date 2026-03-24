@@ -147,7 +147,7 @@ const getStatValue = (key: string) => {
 </template>
 
 <style scoped>
-.dashboard { max-width: 1200px; }
+.dashboard { }
 
 .page-header {
   display: flex;

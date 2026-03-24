@@ -201,7 +201,7 @@ onMounted(fetchData)
 </template>
 
 <style scoped>
-.detail-page { max-width: 1200px; }
+.detail-page { }
 
 .back-btn {
   display: inline-flex; align-items: center; gap: var(--space-2);
@@ -250,7 +250,8 @@ onMounted(fetchData)
 .cell-name { font-weight: 600; }
 .cell-mono { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
 .cell-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-.truncate { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.truncate { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 1600px) { .truncate { max-width: 360px; } }
 .highlight { color: var(--accent) !important; font-weight: 600; }
 
 .delete-btn {

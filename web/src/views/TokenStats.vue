@@ -213,7 +213,7 @@ watch(timeRange, fetchData)
 </template>
 
 <style scoped>
-.token-page { max-width: 1200px; }
+.token-page { }
 
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); gap: var(--space-4); }
 .page-title { font-size: 22px; display: flex; align-items: center; gap: var(--space-2); }
