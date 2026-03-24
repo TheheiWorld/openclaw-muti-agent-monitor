@@ -7,6 +7,7 @@ export default {
   nav: {
     dashboard: 'Dashboard',
     instances: 'Instances',
+    agents: 'Agents',
     tokens: 'Token Stats',
   },
   lang: {
@@ -52,6 +53,27 @@ export default {
     deleteOnlyOffline: 'Only offline instances can be deleted',
     empty: 'No instance data',
     viewDetail: 'View instance {name} details',
+  },
+
+  // Agents
+  agents: {
+    title: 'Agents',
+    desc: 'View and manage all agents',
+    filterAll: 'All',
+    filterActive: 'Active',
+    filterOffline: 'Offline',
+    colName: 'Agent',
+    colId: 'ID',
+    colInstance: 'Instance',
+    colStatus: 'Status',
+    colSessions: 'Sessions',
+    colTokens: 'Total Tokens',
+    colUpdated: 'Updated',
+    colAction: 'Action',
+    delete: 'Delete',
+    deleteConfirm: 'Delete agent "{name}" and all associated data? This cannot be undone.',
+    deleteSuccess: 'Agent deleted',
+    empty: 'No agent data',
   },
 
   // Instance Detail

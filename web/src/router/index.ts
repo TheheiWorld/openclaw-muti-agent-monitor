@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
 import Instances from '../views/Instances.vue'
 import InstanceDetail from '../views/InstanceDetail.vue'
+import Agents from '../views/Agents.vue'
 import TokenStats from '../views/TokenStats.vue'
 import Login from '../views/Login.vue'
 
@@ -10,6 +11,7 @@ const routes = [
   { path: '/', name: 'Dashboard', component: Dashboard },
   { path: '/instances', name: 'Instances', component: Instances },
   { path: '/instances/:id', name: 'InstanceDetail', component: InstanceDetail },
+  { path: '/agents', name: 'Agents', component: Agents },
   { path: '/tokens', name: 'TokenStats', component: TokenStats },
 ]
 

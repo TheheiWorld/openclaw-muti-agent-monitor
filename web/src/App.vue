@@ -20,6 +20,7 @@ const pwdSuccess = ref('')
 const navKeys = [
   { path: '/', key: 'nav.dashboard', icon: '▦' },
   { path: '/instances', key: 'nav.instances', icon: '▣' },
+  { path: '/agents', key: 'nav.agents', icon: '◎' },
   { path: '/tokens', key: 'nav.tokens', icon: '◈' },
 ]
 

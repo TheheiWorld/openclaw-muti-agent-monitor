@@ -7,6 +7,7 @@ export default {
   nav: {
     dashboard: 'Dashboard',
     instances: '实例管理',
+    agents: 'Agent 管理',
     tokens: 'Token 统计',
   },
   lang: {
@@ -52,6 +53,27 @@ export default {
     deleteOnlyOffline: '仅允许删除离线状态的实例',
     empty: '暂无实例数据',
     viewDetail: '查看实例 {name} 详情',
+  },
+
+  // Agents
+  agents: {
+    title: 'Agent 管理',
+    desc: '查看和管理所有 Agent',
+    filterAll: '全部',
+    filterActive: '在线',
+    filterOffline: '离线',
+    colName: 'Agent',
+    colId: 'ID',
+    colInstance: '所属实例',
+    colStatus: '状态',
+    colSessions: '会话数',
+    colTokens: 'Token 总量',
+    colUpdated: '更新时间',
+    colAction: '操作',
+    delete: '删除',
+    deleteConfirm: '确定删除 Agent "{name}" 及其所有关联数据？此操作不可恢复。',
+    deleteSuccess: 'Agent 已删除',
+    empty: '暂无 Agent 数据',
   },
 
   // Instance Detail
