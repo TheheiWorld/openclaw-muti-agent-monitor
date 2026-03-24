@@ -102,6 +102,7 @@ pip install -r requirements.txt
 
 ```yaml
 server_url: "http://<monitor-server-ip>:9200"   # 监控服务端地址
+api_key: "your-collector-api-key"                # API Key（需与服务端 COLLECTOR_API_KEY 一致）
 instance_name: "prod-01"                         # 当前实例名称
 collect_interval: 60                             # 采集间隔（秒）
 openclaw_host: "127.0.0.1"                       # OpenClaw Gateway 地址
@@ -129,6 +130,7 @@ python collector.py
 | `SERVER_PORT` | `9200` | 服务端口 |
 | `SECRET_KEY` | 自动生成 | JWT 签名密钥 |
 | `ACCESS_TOKEN_EXPIRE_HOURS` | `24` | Token 过期时间（小时） |
+| `COLLECTOR_API_KEY` | 空（不校验） | Collector 心跳接口的 API Key，设置后采集器请求必须携带此 Key |
 
 ## API 接口
 
@@ -145,7 +147,7 @@ python collector.py
 | `GET /api/sessions` | 会话列表（支持筛选） | 是 |
 | `GET /api/tokens/summary` | Token 用量汇总 | 是 |
 | `GET /api/tokens/trend` | Token 用量趋势 | 是 |
-| `POST /api/collector/heartbeat` | 采集器心跳上报 | 否 |
+| `POST /api/collector/heartbeat` | 采集器心跳上报 | API Key |
 | `GET /healthz` | 健康检查 | 否 |
 
 ## 部署

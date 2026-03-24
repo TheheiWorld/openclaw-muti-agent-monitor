@@ -278,11 +278,14 @@ def build_heartbeat(config: dict, instance_id: str) -> dict:
     }
 
 
-def send_heartbeat(server_url: str, heartbeat: dict) -> bool:
+def send_heartbeat(server_url: str, heartbeat: dict, api_key: str = "") -> bool:
     """将心跳数据上报到中心后端"""
     url = f"{server_url}/api/collector/heartbeat"
+    headers = {}
+    if api_key:
+        headers["X-API-Key"] = api_key
     try:
-        resp = requests.post(url, json=heartbeat, timeout=10)
+        resp = requests.post(url, json=heartbeat, headers=headers, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             return data.get("ok", False)
@@ -301,6 +304,7 @@ def main():
     config = load_config()
     instance_id = get_or_create_instance_id()
     interval = config.get("collect_interval", 60)
+    api_key = config.get("api_key", "")
 
     logger.info(f"OpenClaw Monitor Collector started")
     logger.info(f"  Instance ID: {instance_id}")
@@ -326,7 +330,7 @@ def main():
             session_count = len(heartbeat["sessions"])
             total_tokens = sum(s.get("totalTokens", 0) for s in heartbeat["sessions"])
 
-            ok = send_heartbeat(config["server_url"], heartbeat)
+            ok = send_heartbeat(config["server_url"], heartbeat, api_key)
             if ok:
                 logger.info(
                     f"Heartbeat sent: status={heartbeat['health']}, "

@@ -102,6 +102,7 @@ Edit `config.yaml`:
 
 ```yaml
 server_url: "http://<monitor-server-ip>:9200"   # Monitor server address
+api_key: "your-collector-api-key"                # API Key (must match server's COLLECTOR_API_KEY)
 instance_name: "prod-01"                         # Unique instance name
 collect_interval: 60                             # Collection interval (seconds)
 openclaw_host: "127.0.0.1"                       # OpenClaw Gateway host
@@ -129,6 +130,7 @@ All settings are configured via environment variables with sensible defaults:
 | `SERVER_PORT` | `9200` | Server port |
 | `SECRET_KEY` | Auto-generated | JWT signing key |
 | `ACCESS_TOKEN_EXPIRE_HOURS` | `24` | JWT token expiry (hours) |
+| `COLLECTOR_API_KEY` | Empty (no check) | API Key for collector heartbeat endpoint; collectors must include this key when set |
 
 ## API Endpoints
 
@@ -145,7 +147,7 @@ All settings are configured via environment variables with sensible defaults:
 | `GET /api/sessions` | List sessions (with filters) | Yes |
 | `GET /api/tokens/summary` | Token usage summary | Yes |
 | `GET /api/tokens/trend` | Token usage trend | Yes |
-| `POST /api/collector/heartbeat` | Collector heartbeat report | No |
+| `POST /api/collector/heartbeat` | Collector heartbeat report | API Key |
 | `GET /healthz` | Health check | No |
 
 ## Deployment

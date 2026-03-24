@@ -1,17 +1,28 @@
 from datetime import datetime, timedelta
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.hash import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_HOURS
+from .config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_HOURS, COLLECTOR_API_KEY
 from .database import get_db
 from .models import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+
+async def verify_collector_api_key(x_api_key: str | None = Header(default=None)):
+    """校验 Collector 请求中的 API Key"""
+    if not COLLECTOR_API_KEY:
+        return  # 未配置 API Key 则跳过校验
+    if not x_api_key or x_api_key != COLLECTOR_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Key",
+        )
 
 
 def verify_password(plain: str, hashed: str) -> bool:

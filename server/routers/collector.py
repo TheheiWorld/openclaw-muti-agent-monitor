@@ -4,10 +4,15 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth import verify_collector_api_key
 from ..database import get_db
 from ..models import Instance, Agent, Session, TokenUsageHourly
 
-router = APIRouter(prefix="/api/collector", tags=["collector"])
+router = APIRouter(
+    prefix="/api/collector",
+    tags=["collector"],
+    dependencies=[Depends(verify_collector_api_key)],
+)
 
 
 class AgentIdentity(BaseModel):

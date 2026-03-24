@@ -3,6 +3,9 @@
 # 监控后端地址
 server_url: "http://127.0.0.1:9200"
 
+# Collector API Key (需与服务端 COLLECTOR_API_KEY 环境变量一致)
+api_key: "123456"
+
 # 实例标识 (每台机器唯一)
 instance_name: "prod-01"
 
