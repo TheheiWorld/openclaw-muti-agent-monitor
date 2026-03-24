@@ -4,8 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=openclaw-monitor
-Group=openclaw-monitor
+# 采集器需要读取 OpenClaw 数据目录（通常在 /root/.openclaw/），
+# 因此需要以 root 或 OpenClaw 运行用户身份执行
+User=root
+Group=root
 WorkingDirectory=/opt/openclaw-monitor/collector
 ExecStart=/opt/openclaw-monitor/venv/bin/python collector.py
 Restart=always

@@ -301,16 +301,15 @@ sudo bash deploy/update-server.sh
 
 #### 1. 部署采集器
 
+> 采集器需要读取 OpenClaw 数据目录（通常在运行用户的 `~/.openclaw/`），因此 systemd 服务默认以 `root` 运行。如果 OpenClaw 以其他用户运行，请修改 `openclaw-collector.service` 中的 `User` 和 `Group`。
+
 ```bash
-# 创建用户和目录（如果与 server 同机器则复用）
-sudo useradd -r -s /sbin/nologin openclaw-monitor 2>/dev/null || true
 sudo mkdir -p /opt/openclaw-monitor
 sudo cp -r collector/ /opt/openclaw-monitor/
-sudo chown -R openclaw-monitor:openclaw-monitor /opt/openclaw-monitor
 
 # 安装依赖（如果虚拟环境已存在则复用）
-sudo -u openclaw-monitor python3 -m venv /opt/openclaw-monitor/venv 2>/dev/null || true
-sudo -u openclaw-monitor /opt/openclaw-monitor/venv/bin/pip install -r /opt/openclaw-monitor/collector/requirements.txt
+sudo python3 -m venv /opt/openclaw-monitor/venv 2>/dev/null || true
+sudo /opt/openclaw-monitor/venv/bin/pip install -r /opt/openclaw-monitor/collector/requirements.txt
 ```
 
 #### 2. 修改配置

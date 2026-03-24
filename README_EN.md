@@ -301,16 +301,15 @@ On each OpenClaw instance machine:
 
 #### 1. Deploy the Collector
 
+> The collector needs read access to the OpenClaw data directory (typically `~/.openclaw/` of the user running OpenClaw). The systemd service runs as `root` by default. If OpenClaw runs as a different user, update `User` and `Group` in `openclaw-collector.service`.
+
 ```bash
-# Create user and directory (reuse if already on the same machine as server)
-sudo useradd -r -s /sbin/nologin openclaw-monitor 2>/dev/null || true
 sudo mkdir -p /opt/openclaw-monitor
 sudo cp -r collector/ /opt/openclaw-monitor/
-sudo chown -R openclaw-monitor:openclaw-monitor /opt/openclaw-monitor
 
 # Install dependencies (reuse venv if it already exists)
-sudo -u openclaw-monitor python3 -m venv /opt/openclaw-monitor/venv 2>/dev/null || true
-sudo -u openclaw-monitor /opt/openclaw-monitor/venv/bin/pip install -r /opt/openclaw-monitor/collector/requirements.txt
+sudo python3 -m venv /opt/openclaw-monitor/venv 2>/dev/null || true
+sudo /opt/openclaw-monitor/venv/bin/pip install -r /opt/openclaw-monitor/collector/requirements.txt
 ```
 
 #### 2. Update Configuration
