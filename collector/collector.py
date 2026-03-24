@@ -95,7 +95,7 @@ def collect_sessions(openclaw_bin: str, env: dict | None = None) -> list[dict]:
     - 多个 JSON 对象拼接 (多 agent store 时每个 store 输出一个 JSON 块)
     - JSON 块之间或末尾可能混入非 JSON 文本 (CLI log/warning 等)
     """
-    output = run_cli_command(openclaw_bin, ["sessions", "--json"], timeout=120, env=env)
+    output = run_cli_command(openclaw_bin, ["sessions", "--all-agents", "--json"], timeout=120, env=env)
     if not output:
         logger.info("Sessions command returned no output")
         return []
