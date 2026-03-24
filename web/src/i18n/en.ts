@@ -8,6 +8,7 @@ export default {
     dashboard: 'Dashboard',
     instances: 'Instances',
     agents: 'Agents',
+    ranks: 'Ranks',
     tokens: 'Token Stats',
   },
   lang: {
@@ -110,6 +111,15 @@ export default {
     sessionColTotal: 'Total',
     sessionColModel: 'Model',
     sessionColUpdated: 'Updated',
+  },
+
+  // Ranks
+  ranks: {
+    title: 'Imperial Ranks',
+    desc: 'Ranked by token contribution, honored by service',
+    totalAgents: 'Total Agents',
+    sessions: 'sessions',
+    empty: 'No agents yet — the court awaits its ministers',
   },
 
   // Token Stats
