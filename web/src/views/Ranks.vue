@@ -113,9 +113,6 @@ onMounted(async () => {
             :key="agent.instance_id + ':' + agent.agent_id"
             class="agent-card"
           >
-            <div class="card-avatar">
-              <span class="avatar-emoji">{{ agent.agent_emoji || tier.rank_emoji }}</span>
-            </div>
             <div class="card-body">
               <div class="card-name" :title="agent.agent_name">{{ agent.agent_name }}</div>
               <div class="card-instance">{{ agent.instance_name }}</div>
@@ -246,19 +243,6 @@ onMounted(async () => {
   border-color: var(--tier-border);
   transform: translateY(-1px);
   box-shadow: 3px 3px 0 var(--tier-bg);
-}
-
-.card-avatar { flex-shrink: 0; }
-
-.avatar-emoji {
-  font-size: calc(var(--tier-avatar-size) * 0.5);
-  width: var(--tier-avatar-size);
-  height: var(--tier-avatar-size);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid var(--border);
-  background: var(--bg-elevated);
 }
 
 .card-body {
