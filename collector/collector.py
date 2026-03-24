@@ -80,7 +80,7 @@ def run_cli_command(openclaw_bin: str, args: list[str], timeout: int = 30) -> st
         logger.error(f"OpenClaw CLI not found: {openclaw_bin}")
         return None
     except subprocess.TimeoutExpired:
-        logger.warning(f"CLI command timed out: {' '.join(cmd)}")
+        logger.warning(f"CLI command timed out ({timeout}s): {' '.join(cmd)}")
         return None
     except Exception as e:
         logger.warning(f"CLI command error: {e}")
@@ -95,7 +95,7 @@ def collect_sessions(openclaw_bin: str) -> list[dict]:
     - 多个 JSON 对象拼接 (多 agent store 时每个 store 输出一个 JSON 块)
     - JSON 块之间或末尾可能混入非 JSON 文本 (CLI log/warning 等)
     """
-    output = run_cli_command(openclaw_bin, ["sessions", "--json"])
+    output = run_cli_command(openclaw_bin, ["sessions", "--json"], timeout=120)
     if not output:
         return []
 
