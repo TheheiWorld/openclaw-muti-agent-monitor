@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/tokens", tags=["tokens"], dependencies=[Depends(
 
 
 def _parse_range(range_str: str) -> datetime:
-    now = datetime.utcnow()
+    now = datetime.now()
     if range_str == "7d":
         return now - timedelta(days=7)
     elif range_str == "30d":

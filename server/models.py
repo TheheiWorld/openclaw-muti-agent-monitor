@@ -21,8 +21,8 @@ class Instance(Base):
     status = Column(String(16), default="online")  # online / offline / unhealthy
     version = Column(String(32), default="")
     last_heartbeat = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class Agent(Base):
@@ -35,7 +35,7 @@ class Agent(Base):
     identity_emoji = Column(String(16), default="")
     identity_theme = Column(String(32), default="")
     status = Column(String(16), default="active")
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     __table_args__ = (
         Index("ix_agent_instance_agent", "instance_id", "agent_id", unique=True),
@@ -62,7 +62,7 @@ class Session(Base):
     model = Column(String(64), default="")
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     __table_args__ = (
         Index("ix_session_instance", "instance_id"),
@@ -96,5 +96,5 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(64), unique=True, nullable=False)
     hashed_password = Column(String(256), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

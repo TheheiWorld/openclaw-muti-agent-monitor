@@ -17,12 +17,12 @@ async def check_instance_status():
     while True:
         await asyncio.sleep(STATUS_CHECK_INTERVAL)
         try:
-            cutoff = datetime.utcnow() - timedelta(seconds=HEARTBEAT_TIMEOUT_SECONDS)
+            cutoff = datetime.now() - timedelta(seconds=HEARTBEAT_TIMEOUT_SECONDS)
             async with async_session() as db:
                 await db.execute(
                     update(Instance)
                     .where(Instance.last_heartbeat < cutoff, Instance.status != "offline")
-                    .values(status="offline", updated_at=datetime.utcnow())
+                    .values(status="offline", updated_at=datetime.now())
                 )
                 await db.commit()
         except Exception as e:

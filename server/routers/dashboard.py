@@ -40,7 +40,7 @@ async def dashboard(db: AsyncSession = Depends(get_db)):
     )).one()
 
     # 今日 Token
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_tokens = (await db.execute(
         select(func.coalesce(func.sum(TokenUsageHourly.total_tokens_sum), 0)).where(
             TokenUsageHourly.hour >= today_start
@@ -61,7 +61,7 @@ async def dashboard(db: AsyncSession = Depends(get_db)):
     } for inst in offline_result.scalars().all()]
 
     # 最近 24h Token 趋势
-    since_24h = datetime.utcnow() - timedelta(hours=24)
+    since_24h = datetime.now() - timedelta(hours=24)
     trend_result = await db.execute(
         select(
             TokenUsageHourly.hour,

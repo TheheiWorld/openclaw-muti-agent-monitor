@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -66,12 +66,12 @@ class HeartbeatPayload(BaseModel):
 def _ts_to_dt(ts: int | None) -> datetime | None:
     if ts is None:
         return None
-    return datetime.fromtimestamp(ts, tz=timezone.utc).replace(tzinfo=None)
+    return datetime.fromtimestamp(ts)
 
 
 @router.post("/heartbeat")
 async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depends(get_db)):
-    now = datetime.utcnow()
+    now = datetime.now()
 
     # --- upsert instance ---
     result = await db.execute(
