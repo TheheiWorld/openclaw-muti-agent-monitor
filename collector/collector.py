@@ -97,7 +97,10 @@ def collect_sessions(openclaw_bin: str) -> list[dict]:
     """
     output = run_cli_command(openclaw_bin, ["sessions", "--json"], timeout=120)
     if not output:
+        logger.info("Sessions command returned no output")
         return []
+
+    logger.debug(f"Sessions raw output ({len(output)} bytes): {output[:500]!r}")
 
     all_sessions = []
 
@@ -120,11 +123,11 @@ def collect_sessions(openclaw_bin: str) -> list[dict]:
                 # 剩余内容中没有 JSON 了
                 if pos < len(text):
                     skipped = text[pos:pos + 200]
-                    logger.debug(f"Skipping trailing non-JSON content at pos {pos}: {skipped!r}")
+                    logger.warning(f"Skipping trailing non-JSON content at pos {pos}: {skipped!r}")
                 break
             next_json = min(candidates)
             skipped = text[pos:next_json]
-            logger.debug(f"Skipping non-JSON content at pos {pos}: {skipped!r}")
+            logger.warning(f"Skipping non-JSON content at pos {pos}: {skipped!r}")
             pos = next_json
 
         try:
@@ -137,13 +140,17 @@ def collect_sessions(openclaw_bin: str) -> list[dict]:
                 all_sessions.extend(data["items"])
             elif isinstance(data, list):
                 all_sessions.extend(data)
+            else:
+                logger.warning(f"Unexpected JSON structure (keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__})")
         except json.JSONDecodeError as e:
             # 当前位置的 '{' 或 '[' 解析失败，跳过这个字符继续
-            logger.debug(f"JSON decode failed at pos {pos}: {e}")
+            logger.warning(f"JSON decode failed at pos {pos}: {e}")
             pos += 1
 
     if all_sessions:
         logger.info(f"Collected {len(all_sessions)} sessions")
+    else:
+        logger.warning(f"No sessions parsed from output ({len(output)} bytes)")
     return all_sessions
 
 
@@ -156,6 +163,7 @@ def collect_agents(openclaw_bin: str) -> list[dict]:
     """
     output = run_cli_command(openclaw_bin, ["agents", "list", "--json"])
     if not output:
+        logger.info("Agents command returned no output")
         return []
 
     all_agents = []
@@ -191,6 +199,8 @@ def collect_agents(openclaw_bin: str) -> list[dict]:
 
     if all_agents:
         logger.info(f"Collected {len(all_agents)} agents")
+    else:
+        logger.warning(f"No agents parsed from output ({len(output)} bytes)")
     return all_agents
 
 
