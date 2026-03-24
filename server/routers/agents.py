@@ -1,12 +1,24 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Agent, Session, Instance
+from ..models import Agent, Session, Instance, TokenUsageHourly
+
+AGENT_OFFLINE_MINUTES = 30
 
 router = APIRouter(prefix="/api/agents", tags=["agents"], dependencies=[Depends(get_current_user)])
+
+
+def _agent_status(updated_at) -> str:
+    if not updated_at:
+        return "offline"
+    if datetime.now() - updated_at > timedelta(minutes=AGENT_OFFLINE_MINUTES):
+        return "offline"
+    return "active"
 
 
 @router.get("")
@@ -44,7 +56,7 @@ async def list_agents(instance_id: str | None = None, db: AsyncSession = Depends
             "name": ag.name,
             "identity_emoji": ag.identity_emoji,
             "identity_theme": ag.identity_theme,
-            "status": ag.status,
+            "status": _agent_status(ag.updated_at),
             "session_count": sess_stats.session_count,
             "total_tokens": sess_stats.total_tokens,
             "updated_at": ag.updated_at.isoformat() if ag.updated_at else None,
@@ -86,3 +98,30 @@ async def get_agent_sessions(
     } for s in sessions]
 
     return {"items": items, "total": len(items)}
+
+
+@router.delete("/{agent_id}")
+async def delete_agent(
+    agent_id: str,
+    instance_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """删除离线 Agent 及其关联的 sessions 和 token 统计"""
+    result = await db.execute(
+        select(Agent).where(Agent.instance_id == instance_id, Agent.agent_id == agent_id)
+    )
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if _agent_status(agent.updated_at) != "offline":
+        raise HTTPException(status_code=400, detail="Only offline agents can be deleted")
+
+    await db.execute(delete(TokenUsageHourly).where(
+        TokenUsageHourly.instance_id == instance_id, TokenUsageHourly.agent_id == agent_id))
+    await db.execute(delete(Session).where(
+        Session.instance_id == instance_id, Session.agent_id == agent_id))
+    await db.execute(delete(Agent).where(
+        Agent.instance_id == instance_id, Agent.agent_id == agent_id))
+    await db.commit()
+
+    return {"ok": True}

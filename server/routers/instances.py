@@ -3,6 +3,7 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
+from .agents import _agent_status
 from ..database import get_db
 from ..models import Instance, Agent, Session, TokenUsageHourly
 
@@ -82,7 +83,7 @@ async def get_instance(instance_id: str, db: AsyncSession = Depends(get_db)):
             "name": ag.name,
             "identity_emoji": ag.identity_emoji,
             "identity_theme": ag.identity_theme,
-            "status": ag.status,
+            "status": _agent_status(ag.updated_at),
             "session_count": sess_stats.session_count,
             "total_tokens": sess_stats.total_tokens,
             "updated_at": ag.updated_at.isoformat() if ag.updated_at else None,

@@ -48,6 +48,9 @@ export const getInstance = (instanceId: string) =>
 export const deleteInstance = (instanceId: string) =>
   api.delete(`/instances/${instanceId}`)
 
+export const deleteAgent = (agentId: string, instanceId: string) =>
+  api.delete(`/agents/${agentId}`, { params: { instance_id: instanceId } })
+
 // Agents
 export const getAgents = (params?: { instance_id?: string }) =>
   api.get('/agents', { params })

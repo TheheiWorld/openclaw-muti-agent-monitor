@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getInstance } from '../api'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import { getInstance, deleteAgent } from '../api'
 import { useI18n } from '../i18n'
 import StatusBadge from '../components/StatusBadge.vue'
 
@@ -22,7 +23,8 @@ const formatTime = (iso: string | null) => {
   return new Date(iso).toLocaleString('zh-CN')
 }
 
-onMounted(async () => {
+const fetchData = async () => {
+  loading.value = true
   try {
     const id = route.params.id as string
     const res = await getInstance(id)
@@ -32,7 +34,23 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+const handleDeleteAgent = async (row: any) => {
+  const name = row.name || row.agent_id
+  const msg = t('detail.agentDeleteConfirm').replace('{name}', name)
+  try {
+    await ElMessageBox.confirm(msg, { confirmButtonText: t('auth.confirm'), cancelButtonText: t('auth.cancel'), type: 'warning' })
+    await deleteAgent(row.agent_id, instance.value.instance_id)
+    ElMessage.success(t('detail.agentDeleteSuccess'))
+    fetchData()
+  } catch (err: any) {
+    if (err === 'cancel') return
+    ElMessage.error(err?.response?.data?.detail || 'Delete failed')
+  }
+}
+
+onMounted(fetchData)
 </script>
 
 <template>
@@ -105,9 +123,11 @@ onMounted(async () => {
               <tr>
                 <th scope="col">{{ t('detail.agentColName') }}</th>
                 <th scope="col">{{ t('detail.agentColId') }}</th>
+                <th scope="col">{{ t('detail.agentColStatus') }}</th>
                 <th scope="col" class="center">{{ t('detail.agentColSessions') }}</th>
                 <th scope="col" class="right">{{ t('detail.agentColTokens') }}</th>
                 <th scope="col">{{ t('detail.agentColUpdated') }}</th>
+                <th scope="col" class="center">{{ t('detail.agentColAction') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -117,9 +137,18 @@ onMounted(async () => {
                   {{ row.name || row.agent_id }}
                 </td>
                 <td class="cell-mono">{{ row.agent_id }}</td>
+                <td><StatusBadge :status="row.status" /></td>
                 <td class="center cell-mono">{{ row.session_count }}</td>
                 <td class="right cell-mono">{{ formatTokens(row.total_tokens) }}</td>
                 <td class="cell-time">{{ formatTime(row.updated_at) }}</td>
+                <td class="center">
+                  <button
+                    v-if="row.status === 'offline'"
+                    class="delete-btn"
+                    @click.stop="handleDeleteAgent(row)"
+                  >{{ t('detail.agentDelete') }}</button>
+                  <span v-else class="cell-mono">-</span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -223,6 +252,19 @@ onMounted(async () => {
 .cell-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .truncate { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .highlight { color: var(--accent) !important; font-weight: 600; }
+
+.delete-btn {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--red);
+  background: transparent;
+  color: var(--red);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) ease;
+}
+.delete-btn:hover { background: var(--red); color: white; }
 
 @media (max-width: 576px) { .page-title { font-size: 18px; } }
 </style>
