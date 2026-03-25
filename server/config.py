@@ -23,4 +23,4 @@ ACCESS_TOKEN_EXPIRE_HOURS = int(os.getenv("ACCESS_TOKEN_EXPIRE_HOURS", "24"))
 COLLECTOR_API_KEY = os.getenv("COLLECTOR_API_KEY", "123456")
 
 # Agent 文档存储目录
-AGENT_DOCS_DIR = BASE_DIR / "data" / "agent-docs"
+AGENT_DOCS_DIR = Path(os.getenv("AGENT_DOCS_DIR", str(BASE_DIR / "data" / "agent-docs")))
