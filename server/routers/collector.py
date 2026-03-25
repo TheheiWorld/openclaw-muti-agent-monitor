@@ -113,6 +113,8 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
     # --- 全量覆盖 agents ---
     await db.execute(delete(Agent).where(Agent.instance_id == payload.instance_id))
     for ag in payload.agents:
+        if not ag.id and not ag.name:
+            continue  # 忽略没有 id 和 name 的脏数据
         db.add(Agent(
             instance_id=payload.instance_id,
             agent_id=ag.id,
