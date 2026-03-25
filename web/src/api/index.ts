@@ -61,6 +61,9 @@ export const getAgent = (agentId: string, instanceId: string) =>
 export const getAgentSessions = (agentId: string, params?: { instance_id?: string }) =>
   api.get(`/agents/${agentId}/sessions`, { params })
 
+export const getAgentDocs = (agentId: string, instanceId: string) =>
+  api.get(`/agents/${agentId}/docs`, { params: { instance_id: instanceId } })
+
 // Sessions
 export const getSessions = (params?: {
   instance_id?: string

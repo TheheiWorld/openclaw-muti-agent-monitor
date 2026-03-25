@@ -5,6 +5,7 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
+from ..config import AGENT_DOCS_DIR
 from ..database import get_db
 from ..models import Agent, Session, Instance, TokenUsageHourly
 
@@ -96,6 +97,9 @@ async def get_agent(agent_id: str, instance_id: str, db: AsyncSession = Depends(
         "name": ag.name,
         "identity_emoji": ag.identity_emoji,
         "identity_theme": ag.identity_theme,
+        "workspace": ag.workspace,
+        "agent_dir": ag.agent_dir,
+        "model": ag.model,
         "status": _agent_status(ag.updated_at),
         "session_count": sess_stats.session_count,
         "total_tokens": sess_stats.total_tokens,
@@ -166,3 +170,18 @@ async def delete_agent(
     await db.commit()
 
     return {"ok": True}
+
+
+@router.get("/{agent_id}/docs")
+async def get_agent_docs(agent_id: str, instance_id: str):
+    """获取 agent 的文档文件内容"""
+    agent_dir = AGENT_DOCS_DIR / instance_id / agent_id
+    files = {}
+    if agent_dir.is_dir():
+        for fpath in sorted(agent_dir.iterdir()):
+            if fpath.suffix == ".md" and fpath.is_file():
+                try:
+                    files[fpath.name] = fpath.read_text(encoding="utf-8")
+                except Exception:
+                    pass
+    return {"files": files}

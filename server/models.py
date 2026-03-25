@@ -34,6 +34,9 @@ class Agent(Base):
     name = Column(String(128), default="")
     identity_emoji = Column(String(16), default="")
     identity_theme = Column(String(32), default="")
+    workspace = Column(String(512), default="")
+    agent_dir = Column(String(512), default="")
+    model = Column(String(128), default="")
     status = Column(String(16), default="active")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

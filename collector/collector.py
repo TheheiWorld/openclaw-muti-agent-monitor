@@ -259,6 +259,9 @@ def build_heartbeat(config: dict, instance_id: str) -> dict:
                 "emoji": ag.get("identityEmoji", "") or identity.get("emoji", ""),
                 "theme": identity.get("theme", ""),
             },
+            "workspace": ag.get("workspace", ""),
+            "agentDir": ag.get("agentDir", ""),
+            "model": ag.get("model", ""),
         })
 
     # 规范化 session 数据
@@ -308,6 +311,51 @@ def build_heartbeat(config: dict, instance_id: str) -> dict:
     }
 
 
+DOC_FILES = ["SOUL.md", "AGENTS.md", "IDENTITY.md", "USER.md", "TOOLS.md"]
+
+
+def sync_agent_docs(config: dict, instance_id: str, agents: list[dict], api_key: str) -> bool:
+    """读取每个 agent 的文档文件并同步到 server，优先从 workspace 查找，其次从 agentDir"""
+    docs_payload = []
+    for ag in agents:
+        workspace = ag.get("workspace", "")
+        if not workspace or not os.path.isdir(workspace):
+            continue
+
+        files = {}
+        for fname in DOC_FILES:
+            fpath = os.path.join(workspace, fname)
+            if os.path.isfile(fpath):
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        files[fname] = f.read()
+                except Exception as e:
+                    logger.warning(f"Read {fpath} failed: {e}")
+        if files:
+            docs_payload.append({"agentId": ag["id"], "files": files})
+
+    if not docs_payload:
+        logger.info("No agent docs to sync")
+        return True
+
+    payload = {"instance_id": instance_id, "agents": docs_payload}
+    url = f"{config['server_url']}/api/collector/agent-docs"
+    headers = {}
+    if api_key:
+        headers["X-API-Key"] = api_key
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        if resp.status_code == 200:
+            logger.info(f"Agent docs synced: {len(docs_payload)} agents")
+            return True
+        else:
+            logger.warning(f"Agent docs sync failed: {resp.status_code}: {resp.text[:200]}")
+            return False
+    except Exception as e:
+        logger.warning(f"Agent docs sync error: {e}")
+        return False
+
+
 def send_heartbeat(server_url: str, heartbeat: dict, api_key: str = "") -> bool:
     """将心跳数据上报到中心后端"""
     url = f"{server_url}/api/collector/heartbeat"
@@ -336,14 +384,19 @@ def main():
     interval = config.get("collect_interval", 60)
     api_key = config.get("api_key", "")
 
+    doc_sync_interval = config.get("doc_sync_interval", 3600)
+
     logger.info(f"OpenClaw Monitor Collector started")
     logger.info(f"  Instance ID: {instance_id}")
     logger.info(f"  Instance Name: {config['instance_name']}")
     logger.info(f"  Server URL: {config['server_url']}")
     logger.info(f"  Collect Interval: {interval}s")
+    logger.info(f"  Doc Sync Interval: {doc_sync_interval}s")
     logger.info(f"  OpenClaw: {config['openclaw_host']}:{config['openclaw_port']}")
 
     running = True
+    doc_sync_needed = True  # 启动时立即同步
+    elapsed_since_doc_sync = 0
 
     def handle_signal(signum, frame):
         nonlocal running
@@ -369,6 +422,16 @@ def main():
                 )
             else:
                 logger.warning("Heartbeat send failed")
+
+            # 定时同步 agent 文档 (启动时立即同步，之后按间隔)
+            elapsed_since_doc_sync += interval
+            if (doc_sync_needed or elapsed_since_doc_sync >= doc_sync_interval) and heartbeat["agents"]:
+                try:
+                    sync_agent_docs(config, instance_id, heartbeat["agents"], api_key)
+                    doc_sync_needed = False
+                    elapsed_since_doc_sync = 0
+                except Exception as e:
+                    logger.error(f"Doc sync error: {e}")
         except Exception as e:
             logger.error(f"Collect error: {e}")
 

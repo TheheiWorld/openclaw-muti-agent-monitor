@@ -87,12 +87,18 @@ export default {
     fieldSessions: 'Sessions',
     fieldTokens: 'Total Tokens',
     fieldCost: 'Cost (USD)',
+    fieldModel: 'Model',
+    fieldWorkspace: 'Workspace',
+    fieldAgentDir: 'Agent Dir',
     fieldUpdated: 'Last Updated',
     sessionTitle: 'Sessions',
     noSessions: 'No session data',
     delete: 'Delete Agent',
     deleteConfirm: 'Delete agent "{name}" and all associated data? This cannot be undone.',
     deleteSuccess: 'Agent deleted',
+    workspaceTitle: 'Workspace Files',
+    workspaceEmpty: 'No document data',
+    workspaceClose: 'Close',
   },
 
   // Instance Detail

@@ -5,6 +5,7 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import { getAgent, getAgentSessions, deleteAgent } from '../api'
 import { useI18n } from '../i18n'
 import StatusBadge from '../components/StatusBadge.vue'
+import WorkspaceModal from '../components/WorkspaceModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,6 +13,7 @@ const { t } = useI18n()
 const loading = ref(true)
 const agent = ref<any>(null)
 const sessions = ref<any[]>([])
+const showWorkspace = ref(false)
 
 const formatTokens = (n: number) => {
   if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M'
@@ -126,6 +128,24 @@ onMounted(fetchData)
             <span class="info-value mono">{{ formatTime(agent.updated_at) }}</span>
           </div>
         </div>
+        <div class="info-grid info-grid-wide">
+          <div class="info-item">
+            <span class="info-label">{{ t('agentDetail.fieldModel') }}</span>
+            <span class="info-value mono">{{ agent.model || '-' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">{{ t('agentDetail.fieldWorkspace') }}</span>
+            <span
+              class="info-value mono text-ellipsis clickable"
+              :title="agent.workspace"
+              @click="agent.workspace && (showWorkspace = true)"
+            >{{ agent.workspace || '-' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">{{ t('agentDetail.fieldAgentDir') }}</span>
+            <span class="info-value mono text-ellipsis" :title="agent.agent_dir">{{ agent.agent_dir || '-' }}</span>
+          </div>
+        </div>
       </section>
 
       <section class="section">
@@ -171,6 +191,14 @@ onMounted(fetchData)
         </div>
       </section>
     </template>
+
+    <WorkspaceModal
+      v-if="agent"
+      :visible="showWorkspace"
+      :agent-id="agent.agent_id"
+      :instance-id="agent.instance_id"
+      @close="showWorkspace = false"
+    />
   </div>
 </template>
 
@@ -218,11 +246,17 @@ onMounted(fetchData)
 .info-pixel { color: var(--accent); }
 
 .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-.info-item { display: flex; flex-direction: column; gap: 2px; padding: var(--space-4); border-right: 1px dashed var(--border); border-bottom: 1px dashed var(--border); }
+.info-grid-wide { grid-template-columns: repeat(3, 1fr); border-top: none; }
+.info-item { display: flex; flex-direction: column; gap: 2px; padding: var(--space-4); border-right: 1px dashed var(--border); border-bottom: 1px dashed var(--border); min-width: 0; }
 .info-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
 .info-value { font-size: 14px; color: var(--text-primary); font-weight: 500; }
 .info-value.mono { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
 .info-value.highlight { color: var(--accent) !important; font-weight: 600; }
+.text-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clickable { cursor: pointer; transition: color var(--duration-fast) ease; }
+.clickable:hover { color: var(--accent) !important; }
+
+@media (max-width: 768px) { .info-grid-wide { grid-template-columns: 1fr; } }
 
 .section { margin-bottom: var(--space-6); }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }

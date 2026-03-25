@@ -1,12 +1,19 @@
+import logging
+import re
 from datetime import datetime
+from pathlib import Path
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import verify_collector_api_key
+from ..config import AGENT_DOCS_DIR
 from ..database import get_db
 from ..models import Instance, Agent, Session, TokenUsageHourly
+
+logger = logging.getLogger("server")
 
 router = APIRouter(
     prefix="/api/collector",
@@ -24,6 +31,9 @@ class AgentPayload(BaseModel):
     id: str
     name: str = ""
     identity: AgentIdentity = AgentIdentity()
+    workspace: str = ""
+    agentDir: str = ""
+    model: str = ""
 
 
 class SessionPayload(BaseModel):
@@ -121,6 +131,9 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
             name=ag.name,
             identity_emoji=ag.identity.emoji,
             identity_theme=ag.identity.theme,
+            workspace=ag.workspace,
+            agent_dir=ag.agentDir,
+            model=ag.model,
             updated_at=now,
         ))
 
@@ -233,4 +246,45 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
             usage.session_count += agg["count"]
 
     await db.commit()
+    return {"ok": True}
+
+
+# ---------- Agent 文档同步 ----------
+
+SAFE_NAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
+class AgentDocsItem(BaseModel):
+    agentId: str
+    files: dict[str, str]  # filename -> content
+
+
+class AgentDocsPayload(BaseModel):
+    instance_id: str
+    agents: list[AgentDocsItem]
+
+
+@router.post("/agent-docs")
+async def receive_agent_docs(payload: AgentDocsPayload):
+    """接收 collector 上报的 agent 文档文件，存储到文件系统"""
+    allowed_files = {"SOUL.md", "AGENTS.md", "IDENTITY.md", "USER.md", "TOOLS.md"}
+    count = 0
+
+    for ag in payload.agents:
+        if not ag.agentId or not SAFE_NAME_RE.match(ag.agentId):
+            continue
+        if not SAFE_NAME_RE.match(payload.instance_id):
+            continue
+
+        agent_dir = AGENT_DOCS_DIR / payload.instance_id / ag.agentId
+        agent_dir.mkdir(parents=True, exist_ok=True)
+
+        for fname, content in ag.files.items():
+            if fname not in allowed_files:
+                continue
+            fpath = agent_dir / fname
+            fpath.write_text(content, encoding="utf-8")
+            count += 1
+
+    logger.info(f"Agent docs received: {len(payload.agents)} agents, {count} files")
     return {"ok": True}

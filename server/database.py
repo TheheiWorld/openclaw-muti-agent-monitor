@@ -35,6 +35,9 @@ async def _migrate_add_columns(conn):
     """检查并添加缺失的列"""
     migrations = [
         ("instances", "hostname", "VARCHAR(256) DEFAULT ''"),
+        ("agents", "workspace", "VARCHAR(512) DEFAULT ''"),
+        ("agents", "agent_dir", "VARCHAR(512) DEFAULT ''"),
+        ("agents", "model", "VARCHAR(128) DEFAULT ''"),
     ]
     for table, column, col_def in migrations:
         try:

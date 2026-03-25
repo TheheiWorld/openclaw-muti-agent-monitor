@@ -87,12 +87,18 @@ export default {
     fieldSessions: '会话数',
     fieldTokens: 'Token 总量',
     fieldCost: '费用 (USD)',
+    fieldModel: '模型',
+    fieldWorkspace: '工作目录',
+    fieldAgentDir: 'Agent 目录',
     fieldUpdated: '最后更新',
     sessionTitle: '关联会话',
     noSessions: '暂无会话数据',
     delete: '删除 Agent',
     deleteConfirm: '确定删除 Agent "{name}" 及其所有关联数据？此操作不可恢复。',
     deleteSuccess: 'Agent 已删除',
+    workspaceTitle: '工作目录文件',
+    workspaceEmpty: '暂无文档数据',
+    workspaceClose: '关闭',
   },
 
   // Instance Detail
