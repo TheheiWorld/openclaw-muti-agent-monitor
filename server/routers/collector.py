@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import verify_collector_api_key
@@ -110,29 +110,17 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
         instance.last_heartbeat = now
         instance.updated_at = now
 
-    # --- upsert agents ---
+    # --- 全量覆盖 agents ---
+    await db.execute(delete(Agent).where(Agent.instance_id == payload.instance_id))
     for ag in payload.agents:
-        result = await db.execute(
-            select(Agent).where(
-                Agent.instance_id == payload.instance_id,
-                Agent.agent_id == ag.id,
-            )
-        )
-        agent = result.scalar_one_or_none()
-        if agent is None:
-            db.add(Agent(
-                instance_id=payload.instance_id,
-                agent_id=ag.id,
-                name=ag.name,
-                identity_emoji=ag.identity.emoji,
-                identity_theme=ag.identity.theme,
-                updated_at=now,
-            ))
-        else:
-            agent.name = ag.name
-            agent.identity_emoji = ag.identity.emoji
-            agent.identity_theme = ag.identity.theme
-            agent.updated_at = now
+        db.add(Agent(
+            instance_id=payload.instance_id,
+            agent_id=ag.id,
+            name=ag.name,
+            identity_emoji=ag.identity.emoji,
+            identity_theme=ag.identity.theme,
+            updated_at=now,
+        ))
 
     # --- upsert sessions + aggregate token usage ---
     current_hour = now.replace(minute=0, second=0, microsecond=0)
