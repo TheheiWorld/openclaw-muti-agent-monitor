@@ -48,6 +48,7 @@ async def list_instances(status: str | None = None, db: AsyncSession = Depends(g
             "created_at": inst.created_at.isoformat() if inst.created_at else None,
         })
 
+    items.sort(key=lambda x: x["total_tokens"], reverse=True)
     return {"items": items, "total": len(items)}
 
 
@@ -112,6 +113,8 @@ async def get_instance(instance_id: str, db: AsyncSession = Depends(get_db)):
         "ended_at": s.ended_at.isoformat() if s.ended_at else None,
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     } for s in sessions]
+
+    agent_items.sort(key=lambda x: x["total_tokens"], reverse=True)
 
     return {
         "instance_id": inst.instance_id,

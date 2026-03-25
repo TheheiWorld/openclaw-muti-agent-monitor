@@ -63,6 +63,7 @@ async def list_agents(instance_id: str | None = None, db: AsyncSession = Depends
             "updated_at": ag.updated_at.isoformat() if ag.updated_at else None,
         })
 
+    items.sort(key=lambda x: x["total_tokens"], reverse=True)
     return {"items": items, "total": len(items)}
 
 
