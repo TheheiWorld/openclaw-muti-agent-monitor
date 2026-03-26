@@ -159,7 +159,7 @@ def collect_agents(openclaw_bin: str, env: dict | None = None) -> list[dict]:
     包含 id, name, isDefault, identityEmoji, identityName 等字段。
     输出可能包含多个 JSON 块拼接或混入非 JSON 文本。
     """
-    output = run_cli_command(openclaw_bin, ["agents", "list", "--json"], env=env)
+    output = run_cli_command(openclaw_bin, ["agents", "list", "--json"], timeout=120, env=env)
     if not output:
         logger.info("Agents command returned no output")
         return []
