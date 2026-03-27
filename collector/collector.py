@@ -381,22 +381,35 @@ def send_heartbeat(server_url: str, heartbeat: dict, api_key: str = "") -> bool:
 def main():
     config = load_config()
     instance_id = get_or_create_instance_id()
-    interval = config.get("collect_interval", 60)
-    api_key = config.get("api_key", "")
 
+    # 读取配置间隔 (秒)
+    # 优先读取新配置，不存在则回退
+    heartbeat_interval = config.get("heartbeat_interval", config.get("collect_interval", 60))
+    agents_interval = config.get("agents_interval", config.get("collect_interval", 120))
+    sessions_interval = config.get("sessions_interval", config.get("collect_interval", 60))
     doc_sync_interval = config.get("doc_sync_interval", 3600)
+    api_key = config.get("api_key", "")
 
     logger.info(f"OpenClaw Monitor Collector started")
     logger.info(f"  Instance ID: {instance_id}")
     logger.info(f"  Instance Name: {config['instance_name']}")
     logger.info(f"  Server URL: {config['server_url']}")
-    logger.info(f"  Collect Interval: {interval}s")
-    logger.info(f"  Doc Sync Interval: {doc_sync_interval}s")
+    logger.info(f"  Intervals: Heartbeat={heartbeat_interval}s, Agents={agents_interval}s, Sessions={sessions_interval}s, DocSync={doc_sync_interval}s")
     logger.info(f"  OpenClaw: {config['openclaw_host']}:{config['openclaw_port']}")
 
     running = True
-    doc_sync_needed = True  # 启动时立即同步
-    elapsed_since_doc_sync = 0
+
+    # 数据缓存
+    cached_agents = []
+    cached_sessions = []
+    cached_health = {"live": False, "ready": False}
+    cached_version = ""
+
+    # 上次执行时间
+    last_heartbeat = 0
+    last_agents = 0
+    last_sessions = 0
+    last_doc_sync = 0
 
     def handle_signal(signum, frame):
         nonlocal running
@@ -406,40 +419,134 @@ def main():
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
+    host = config["openclaw_host"]
+    port = config["openclaw_port"]
+    openclaw_bin = config["openclaw_bin"]
+    openclaw_home = config.get("openclaw_home", "")
+    cli_env = None
+    if openclaw_home:
+        cli_env = os.environ.copy()
+        cli_env["HOME"] = openclaw_home
+
+    # 本机信息 (只需获取一次)
+    machine_host = config.get("advertise_host", "")
+    if not machine_host:
+        machine_host = _get_local_ip()
+    try:
+        hostname = socket.gethostname()
+    except Exception:
+        hostname = ""
+
     while running:
+        now = time.time()
+        should_send = False
+
         try:
-            heartbeat = build_heartbeat(config, instance_id)
-            agent_count = len(heartbeat["agents"])
-            session_count = len(heartbeat["sessions"])
-            total_tokens = sum(s.get("totalTokens", 0) for s in heartbeat["sessions"])
+            # 1. 检查 Heartbeat / Health
+            if now - last_heartbeat >= heartbeat_interval:
+                cached_health = check_health(host, port)
+                if cached_health["live"] and not cached_version:
+                    cached_version = collect_version(openclaw_bin, env=cli_env)
+                last_heartbeat = now
+                should_send = True
 
-            ok = send_heartbeat(config["server_url"], heartbeat, api_key)
-            if ok:
-                logger.info(
-                    f"Heartbeat sent: status={heartbeat['health']}, "
-                    f"agents={agent_count}, sessions={session_count}, "
-                    f"tokens={total_tokens}"
-                )
-            else:
-                logger.warning("Heartbeat send failed")
+            # 2. 检查 Agents
+            if now - last_agents >= agents_interval:
+                if cached_health["live"]:
+                    agents_raw = collect_agents(openclaw_bin, env=cli_env)
+                    # 规范化 agent 数据
+                    new_agents = []
+                    for ag in agents_raw:
+                        identity = ag.get("identity", {}) or {}
+                        new_agents.append({
+                            "id": ag.get("id", ""),
+                            "name": ag.get("identityName", "") or ag.get("name", "") or identity.get("name", ""),
+                            "identity": {
+                                "emoji": ag.get("identityEmoji", "") or identity.get("emoji", ""),
+                                "theme": identity.get("theme", ""),
+                            },
+                            "workspace": ag.get("workspace", ""),
+                            "agentDir": ag.get("agentDir", ""),
+                            "model": ag.get("model", ""),
+                        })
+                    cached_agents = new_agents
+                last_agents = now
+                should_send = True
 
-            # 定时同步 agent 文档 (启动时立即同步，之后按间隔)
-            elapsed_since_doc_sync += interval
-            if (doc_sync_needed or elapsed_since_doc_sync >= doc_sync_interval) and heartbeat["agents"]:
-                try:
-                    sync_agent_docs(config, instance_id, heartbeat["agents"], api_key)
-                    doc_sync_needed = False
-                    elapsed_since_doc_sync = 0
-                except Exception as e:
-                    logger.error(f"Doc sync error: {e}")
+            # 3. 检查 Sessions
+            if now - last_sessions >= sessions_interval:
+                if cached_health["live"]:
+                    sessions_raw = collect_sessions(openclaw_bin, env=cli_env)
+                    # 规范化 session 数据
+                    new_sessions = []
+                    for sess in sessions_raw:
+                        new_sessions.append({
+                            "key": sess.get("key", ""),
+                            "sessionId": sess.get("sessionId", sess.get("session_id", "")),
+                            "agentId": sess.get("agentId", sess.get("agent_id", "")),
+                            "channel": sess.get("channel", ""),
+                            "displayName": sess.get("displayName", sess.get("display_name", "")),
+                            "status": sess.get("status", ""),
+                            "inputTokens": sess.get("inputTokens", sess.get("input_tokens", 0)) or 0,
+                            "outputTokens": sess.get("outputTokens", sess.get("output_tokens", 0)) or 0,
+                            "totalTokens": sess.get("totalTokens", sess.get("total_tokens", 0)) or 0,
+                            "contextTokens": sess.get("contextTokens", sess.get("context_tokens", 0)) or 0,
+                            "estimatedCostUsd": sess.get("estimatedCostUsd", sess.get("estimated_cost_usd", 0)) or 0,
+                            "modelProvider": sess.get("modelProvider", sess.get("model_provider", "")),
+                            "model": sess.get("model", ""),
+                            "startedAt": sess.get("startedAt", sess.get("started_at")),
+                            "endedAt": sess.get("endedAt", sess.get("ended_at")),
+                            "updatedAt": sess.get("updatedAt", sess.get("updated_at")),
+                        })
+                    cached_sessions = new_sessions
+                last_sessions = now
+                should_send = True
+
+            # 4. 发送数据 (如果任一部分更新了)
+            if should_send:
+                heartbeat_payload = {
+                    "instance_id": instance_id,
+                    "instance_name": config["instance_name"],
+                    "hostname": hostname,
+                    "host": machine_host,
+                    "port": port,
+                    "version": cached_version,
+                    "health": cached_health,
+                    "agents": cached_agents,
+                    "sessions": cached_sessions,
+                    "timestamp": int(now),
+                }
+
+                total_tokens = sum(s.get("totalTokens", 0) for s in cached_sessions)
+                ok = send_heartbeat(config["server_url"], heartbeat_payload, api_key)
+                if ok:
+                    logger.info(
+                        f"Heartbeat sent: status={cached_health}, "
+                        f"agents={len(cached_agents)}, sessions={len(cached_sessions)}, "
+                        f"tokens={total_tokens}"
+                    )
+                else:
+                    logger.warning("Heartbeat send failed")
+
+            # 5. 定时同步 agent 文档
+            if now - last_doc_sync >= doc_sync_interval:
+                if cached_agents:
+                    try:
+                        sync_agent_docs(config, instance_id, cached_agents, api_key)
+                        last_doc_sync = now
+                    except Exception as e:
+                        logger.error(f"Doc sync error: {e}")
+                else:
+                    # 如果没有 agent，也重置时间，避免在没有 agent 的情况下频繁重试
+                    last_doc_sync = now
+
         except Exception as e:
-            logger.error(f"Collect error: {e}")
+            logger.error(f"Loop error: {e}")
 
-        # 可中断的 sleep
-        for _ in range(interval):
-            if not running:
-                break
-            time.sleep(1)
+        # 每秒 tick 一次，处理颗粒度更细的定时任务
+        time.sleep(1)
+        if not running:
+            break
 
     logger.info("Collector stopped")
 
