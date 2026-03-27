@@ -154,48 +154,6 @@ onMounted(fetchData)
           </table>
         </div>
       </section>
-
-      <section class="section">
-        <div class="section-header">
-          <h2 class="section-title">
-            <span class="section-pixel" aria-hidden="true">▸</span>
-            {{ t('detail.sessionTitle') }}
-          </h2>
-          <span class="section-count">{{ instance.sessions?.length || 0 }}</span>
-        </div>
-        <div class="table-panel">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th scope="col">{{ t('detail.sessionColId') }}</th>
-                <th scope="col">{{ t('detail.sessionColAgent') }}</th>
-                <th scope="col">{{ t('detail.sessionColChannel') }}</th>
-                <th scope="col">{{ t('detail.sessionColUser') }}</th>
-                <th scope="col">{{ t('detail.sessionColStatus') }}</th>
-                <th scope="col" class="right">{{ t('detail.sessionColInput') }}</th>
-                <th scope="col" class="right">{{ t('detail.sessionColOutput') }}</th>
-                <th scope="col" class="right">{{ t('detail.sessionColTotal') }}</th>
-                <th scope="col">{{ t('detail.sessionColModel') }}</th>
-                <th scope="col">{{ t('detail.sessionColUpdated') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in instance.sessions" :key="row.session_id">
-                <td class="cell-mono truncate" :title="row.session_id">{{ row.session_id }}</td>
-                <td class="cell-mono truncate" :title="row.agent_id">{{ row.agent_id }}</td>
-                <td class="cell-mono">{{ row.channel }}</td>
-                <td class="truncate" :title="row.display_name">{{ row.display_name }}</td>
-                <td><StatusBadge :status="row.status" /></td>
-                <td class="right cell-mono">{{ formatTokens(row.input_tokens) }}</td>
-                <td class="right cell-mono">{{ formatTokens(row.output_tokens) }}</td>
-                <td class="right cell-mono highlight">{{ formatTokens(row.total_tokens) }}</td>
-                <td class="cell-mono truncate" :title="row.model">{{ row.model }}</td>
-                <td class="cell-time">{{ formatTime(row.updated_at) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
     </template>
   </div>
 </template>
