@@ -35,3 +35,5 @@ Thumbs.db
 *.local
 .claude/
 server/monitor.db
+server/monitor.db-shm
+server/monitor.db-wal
