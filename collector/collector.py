@@ -525,23 +525,35 @@ def main():
                     "hourly_usage": cached_hourly_usage,
                     "timestamp": int(now),
                 }
-                send_heartbeat(config["server_url"], heartbeat_payload, api_key)
+                if send_heartbeat(config["server_url"], heartbeat_payload, api_key):
+                    logger.info(
+                        f"Heartbeat sent: agents={len(cached_agents)}, "
+                        f"sessions={len(cached_sessions)}, hourly_records={len(cached_hourly_usage)}"
+                    )
+                else:
+                    logger.warning("Heartbeat send failed")
 
             # 5. 同步 agent 文档
             if now - last_doc_sync >= doc_sync_interval:
                 if cached_agents and sync_agent_docs(config, instance_id, cached_agents, api_key):
+                    logger.info(f"Agent docs synced: {len(cached_agents)} agents")
                     last_doc_sync = now
 
             # 6. 每日凌晨 1 点统计昨日 Token 消耗
             current_date_str = now_dt.strftime("%Y-%m-%d")
             if now_dt.hour == 1 and last_daily_stats_date != current_date_str:
                 if cached_agents:
+                    logger.info("Starting daily token usage calculation...")
                     stats = calculate_daily_usage(cached_agents)
                     if stats:
                         payload = {"instance_id": instance_id, "items": stats}
                         if send_daily_usage(config["server_url"], payload, api_key):
+                            logger.info(f"Daily usage reported: {len(stats)} agents")
                             last_daily_stats_date = current_date_str
+                        else:
+                            logger.warning("Daily usage report failed, will retry")
                     else:
+                        logger.info("No token usage found for yesterday")
                         last_daily_stats_date = current_date_str
         except Exception as e:
             logger.error(f"Loop error: {e}")
