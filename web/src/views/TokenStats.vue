@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { getTokenSummary, getTokenTrend } from '../api'
+import { getTokenSummary, getTokenTrend, getTokenRanksToday } from '../api'
 import { useI18n } from '../i18n'
 import TokenChart from '../components/TokenChart.vue'
 
@@ -23,6 +23,7 @@ const summary = ref<any>({
   by_agent: [],
 })
 const trend = ref<any[]>([])
+const ranksToday = ref<any[]>([])
 
 const timeRangeKeys = [
   { value: '24h', key: 'tokenStats.range24h' },
@@ -39,12 +40,14 @@ const formatTokens = (n: number) => {
 const fetchData = async () => {
   loading.value = true
   try {
-    const [summaryRes, trendRes] = await Promise.all([
+    const [summaryRes, trendRes, ranksTodayRes] = await Promise.all([
       getTokenSummary(),
       getTokenTrend({ range: timeRange.value }),
+      getTokenRanksToday(),
     ])
     summary.value = summaryRes.data
     trend.value = trendRes.data.points
+    ranksToday.value = ranksTodayRes.data
   } catch (e) {
     console.error('Failed to load token stats', e)
   } finally {
@@ -165,6 +168,39 @@ watch(timeRange, fetchData)
       </div>
       <div class="chart-body" v-if="trend.length > 0"><TokenChart :data="trend" /></div>
       <div v-else class="empty-state" role="status"><span>{{ t('tokenStats.noTrend') }}</span></div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title"><span class="section-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.rankAgentToday') }}</h2>
+      </div>
+      <div class="table-panel">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">{{ t('tokenStats.colAgent') }}</th>
+              <th scope="col">{{ t('tokenStats.colInstance') }}</th>
+              <th scope="col" class="right">{{ t('tokenStats.colInput') }}</th>
+              <th scope="col" class="right">{{ t('tokenStats.colOutput') }}</th>
+              <th scope="col" class="right">{{ t('tokenStats.colTotal') }}</th>
+            </tr>
+          </thead>
+          <tbody v-if="ranksToday.length > 0">
+            <tr v-for="row in ranksToday" :key="`${row.instance_id}-${row.agent_id}`">
+              <td class="cell-name">{{ row.agent_name }}</td>
+              <td class="cell-mono">{{ row.instance_name }}</td>
+              <td class="right cell-mono">{{ formatTokens(row.input_tokens) }}</td>
+              <td class="right cell-mono">{{ formatTokens(row.output_tokens) }}</td>
+              <td class="right cell-mono highlight">{{ formatTokens(row.total_tokens) }}</td>
+            </tr>
+          </tbody>
+          <tbody v-else>
+            <tr>
+              <td colspan="5" class="empty-state-sm">{{ t('tokenStats.noData') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <div class="rankings-grid">

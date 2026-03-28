@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import TokenUsageDaily, Session, Instance, Agent
+from ..models import TokenUsageDaily, Session, Instance, Agent, TokenUsageHourly
 
 router = APIRouter(prefix="/api/tokens", tags=["tokens"], dependencies=[Depends(get_current_user)])
 
@@ -18,6 +18,56 @@ def _parse_range(range_str: str) -> datetime:
         return now - timedelta(days=30)
     else:  # default 24h
         return now - timedelta(hours=24)
+
+
+@router.get("/ranks/agents/today")
+async def token_ranks_agents_today(db: AsyncSession = Depends(get_db)):
+    """今日实时 Agent Token 排行 (由 TokenUsageHourly 提供)"""
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    query = (
+        select(
+            TokenUsageHourly.agent_id,
+            TokenUsageHourly.instance_id,
+            Agent.name.label("agent_name"),
+            Instance.name.label("instance_name"),
+            func.sum(TokenUsageHourly.input_tokens_sum).label("input_tokens"),
+            func.sum(TokenUsageHourly.output_tokens_sum).label("output_tokens"),
+            func.sum(TokenUsageHourly.total_tokens_sum).label("total_tokens"),
+        )
+        .join(
+            Agent,
+            (TokenUsageHourly.instance_id == Agent.instance_id) & (TokenUsageHourly.agent_id == Agent.agent_id),
+            isouter=True
+        )
+        .join(
+            Instance,
+            TokenUsageHourly.instance_id == Instance.instance_id,
+            isouter=True
+        )
+        .where(TokenUsageHourly.hour >= today_start)
+        .group_by(
+            TokenUsageHourly.instance_id,
+            TokenUsageHourly.agent_id,
+            Agent.name,
+            Instance.name
+        )
+        .order_by(func.sum(TokenUsageHourly.total_tokens_sum).desc())
+    )
+
+    result = await db.execute(query)
+    return [
+        {
+            "agent_id": row.agent_id,
+            "agent_name": row.agent_name or row.agent_id,
+            "instance_id": row.instance_id,
+            "instance_name": row.instance_name or row.instance_id,
+            "input_tokens": row.input_tokens or 0,
+            "output_tokens": row.output_tokens or 0,
+            "total_tokens": row.total_tokens or 0,
+        }
+        for row in result.all()
+    ]
 
 
 @router.get("/summary")

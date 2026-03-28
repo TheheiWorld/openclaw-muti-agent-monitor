@@ -77,6 +77,8 @@ export const getSessions = (params?: {
 // Tokens
 export const getTokenSummary = () => api.get('/tokens/summary')
 
+export const getTokenRanksToday = () => api.get('/tokens/ranks/agents/today')
+
 export const getTokenTrend = (params?: {
   range?: string
   instance_id?: string
