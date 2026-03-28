@@ -58,6 +58,8 @@ class Session(Base):
     status = Column(String(16), default="")  # running / done / failed / killed / timeout
     input_tokens = Column(Integer, default=0)
     output_tokens = Column(Integer, default=0)
+    cache_read_tokens = Column(Integer, default=0)
+    cache_write_tokens = Column(Integer, default=0)
     total_tokens = Column(Integer, default=0)
     context_tokens = Column(Integer, default=0)
     estimated_cost_usd = Column(Float, default=0.0)
@@ -90,6 +92,26 @@ class TokenUsageHourly(Base):
         Index("ix_token_hour", "hour"),
         Index("ix_token_instance_hour", "instance_id", "hour"),
         Index("ix_token_unique", "instance_id", "agent_id", "hour", unique=True),
+    )
+
+
+class TokenUsageDaily(Base):
+    __tablename__ = "token_usage_daily"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    instance_id = Column(String(64), nullable=False)
+    agent_id = Column(String(64), nullable=False)
+    date = Column(DateTime, nullable=False)  # 精确到天
+    input_tokens_sum = Column(Integer, default=0)
+    output_tokens_sum = Column(Integer, default=0)
+    cache_read_tokens_sum = Column(Integer, default=0)
+    cache_write_tokens_sum = Column(Integer, default=0)
+    total_tokens_sum = Column(Integer, default=0)
+
+    __table_args__ = (
+        Index("ix_token_daily_date", "date"),
+        Index("ix_token_daily_instance_date", "instance_id", "date"),
+        Index("ix_token_daily_unique", "instance_id", "agent_id", "date", unique=True),
     )
 
 

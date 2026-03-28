@@ -2,6 +2,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Union
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import verify_collector_api_key
 from ..config import AGENT_DOCS_DIR
 from ..database import get_db
-from ..models import Instance, Agent, Session, TokenUsageHourly
+from ..models import Instance, Agent, Session, TokenUsageHourly, TokenUsageDaily
 
 logger = logging.getLogger("server")
 
@@ -45,14 +46,24 @@ class SessionPayload(BaseModel):
     status: str = ""
     inputTokens: int = 0
     outputTokens: int = 0
+    cacheReadTokens: int = 0
+    cacheWriteTokens: int = 0
     totalTokens: int = 0
     contextTokens: int = 0
     estimatedCostUsd: float = 0.0
     modelProvider: str = ""
     model: str = ""
-    startedAt: int | None = None
-    endedAt: int | None = None
-    updatedAt: int | None = None
+    startedAt: Union[int, str, None] = None
+    endedAt: Union[int, str, None] = None
+    updatedAt: Union[int, str, None] = None
+
+
+class HourlyUsageItem(BaseModel):
+    agent_id: str
+    hour: str  # YYYY-MM-DD HH:00:00
+    input: int = 0
+    output: int = 0
+    total: int = 0
 
 
 class HealthPayload(BaseModel):
@@ -70,18 +81,35 @@ class HeartbeatPayload(BaseModel):
     health: HealthPayload = HealthPayload()
     agents: list[AgentPayload] = []
     sessions: list[SessionPayload] = []
+    hourly_usage: list[HourlyUsageItem] = []
     timestamp: int | None = None
 
 
-def _ts_to_dt(ts: int | None) -> datetime | None:
+def _ts_to_dt(ts: Union[int, str, None]) -> datetime | None:
     if ts is None:
         return None
-    return datetime.fromtimestamp(ts)
+    if isinstance(ts, str):
+        try:
+            # 处理 ISO 格式
+            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            if ts.isdigit():
+                ts = int(ts)
+            else:
+                return None
+
+    if isinstance(ts, int):
+        # 13位以上认为是毫秒
+        if ts > 10**11:
+            return datetime.fromtimestamp(ts / 1000.0)
+        return datetime.fromtimestamp(ts)
+    return None
 
 
 @router.post("/heartbeat")
 async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depends(get_db)):
     now = datetime.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # --- upsert instance ---
     result = await db.execute(
@@ -124,7 +152,7 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
     await db.execute(delete(Agent).where(Agent.instance_id == payload.instance_id))
     for ag in payload.agents:
         if not ag.id and not ag.name:
-            continue  # 忽略没有 id 和 name 的脏数据
+            continue
         db.add(Agent(
             instance_id=payload.instance_id,
             agent_id=ag.id,
@@ -137,10 +165,7 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
             updated_at=now,
         ))
 
-    # --- upsert sessions + aggregate token usage ---
-    current_hour = now.replace(minute=0, second=0, microsecond=0)
-    token_agg: dict[str, dict] = {}  # key: f"{instance_id}:{agent_id}"
-
+    # --- upsert sessions ---
     for sess in payload.sessions:
         result = await db.execute(
             select(Session).where(
@@ -149,19 +174,6 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
             )
         )
         existing = result.scalar_one_or_none()
-
-        # 计算本次 token 增量
-        prev_input = 0
-        prev_output = 0
-        prev_total = 0
-        if existing:
-            prev_input = existing.input_tokens or 0
-            prev_output = existing.output_tokens or 0
-            prev_total = existing.total_tokens or 0
-
-        delta_input = max(0, sess.inputTokens - prev_input)
-        delta_output = max(0, sess.outputTokens - prev_output)
-        delta_total = max(0, sess.totalTokens - prev_total)
 
         if existing is None:
             db.add(Session(
@@ -174,6 +186,8 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
                 status=sess.status,
                 input_tokens=sess.inputTokens,
                 output_tokens=sess.outputTokens,
+                cache_read_tokens=sess.cacheReadTokens,
+                cache_write_tokens=sess.cacheWriteTokens,
                 total_tokens=sess.totalTokens,
                 context_tokens=sess.contextTokens,
                 estimated_cost_usd=sess.estimatedCostUsd,
@@ -181,12 +195,8 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
                 model=sess.model,
                 started_at=_ts_to_dt(sess.startedAt),
                 ended_at=_ts_to_dt(sess.endedAt),
-                updated_at=now,
+                updated_at=_ts_to_dt(sess.updatedAt) or now,
             ))
-            # 新 session 的全量 token 都算作增量
-            delta_input = sess.inputTokens
-            delta_output = sess.outputTokens
-            delta_total = sess.totalTokens
         else:
             existing.session_key = sess.key
             existing.channel = sess.channel
@@ -194,6 +204,8 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
             existing.status = sess.status
             existing.input_tokens = sess.inputTokens
             existing.output_tokens = sess.outputTokens
+            existing.cache_read_tokens = sess.cacheReadTokens
+            existing.cache_write_tokens = sess.cacheWriteTokens
             existing.total_tokens = sess.totalTokens
             existing.context_tokens = sess.contextTokens
             existing.estimated_cost_usd = sess.estimatedCostUsd
@@ -201,51 +213,97 @@ async def receive_heartbeat(payload: HeartbeatPayload, db: AsyncSession = Depend
             existing.model = sess.model
             existing.started_at = _ts_to_dt(sess.startedAt)
             existing.ended_at = _ts_to_dt(sess.endedAt)
-            existing.updated_at = now
+            existing.updated_at = _ts_to_dt(sess.updatedAt) or now
 
-        # 累积 token 增量
-        if delta_input > 0 or delta_output > 0 or delta_total > 0:
-            agg_key = f"{payload.instance_id}:{sess.agentId}"
-            if agg_key not in token_agg:
-                token_agg[agg_key] = {
-                    "instance_id": payload.instance_id,
-                    "agent_id": sess.agentId,
-                    "input": 0, "output": 0, "total": 0, "count": 0,
-                }
-            token_agg[agg_key]["input"] += delta_input
-            token_agg[agg_key]["output"] += delta_output
-            token_agg[agg_key]["total"] += delta_total
-            token_agg[agg_key]["count"] += 1
+    # --- 处理 TokenUsageHourly (同步覆盖逻辑) ---
+    if payload.hourly_usage:
+        # 1. 识别涉及到的 agent
+        affected_agents = set(item.agent_id for item in payload.hourly_usage)
+        
+        # 2. 删除这些 agent 今天的旧数据 (只保留当天)
+        for aid in affected_agents:
+            await db.execute(
+                delete(TokenUsageHourly).where(
+                    TokenUsageHourly.instance_id == payload.instance_id,
+                    TokenUsageHourly.agent_id == aid,
+                    TokenUsageHourly.hour >= today_start
+                )
+            )
+        
+        # 3. 插入新数据
+        for item in payload.hourly_usage:
+            try:
+                hour_dt = datetime.strptime(item.hour, "%Y-%m-%d %H:00:00")
+            except ValueError:
+                continue
+            
+            db.add(TokenUsageHourly(
+                instance_id=payload.instance_id,
+                agent_id=item.agent_id,
+                hour=hour_dt,
+                input_tokens_sum=item.input,
+                output_tokens_sum=item.output,
+                total_tokens_sum=item.total,
+                session_count=0,
+            ))
 
-    # --- upsert token_usage_hourly ---
-    for agg in token_agg.values():
-        if agg["total"] == 0:
+    await db.commit()
+    return {"ok": True}
+
+
+class DailyUsageItem(BaseModel):
+    agent_id: str
+    date: str  # YYYY-MM-DD
+    input: int = 0
+    output: int = 0
+    cache_read: int = 0
+    cache_write: int = 0
+    total: int = 0
+
+
+class DailyUsagePayload(BaseModel):
+    instance_id: str
+    items: list[DailyUsageItem]
+
+
+@router.post("/daily-usage")
+async def receive_daily_usage(payload: DailyUsagePayload, db: AsyncSession = Depends(get_db)):
+    """接收 collector 上报的每日 Agent Token 消耗统计"""
+    for item in payload.items:
+        try:
+            date_dt = datetime.strptime(item.date, "%Y-%m-%d")
+        except ValueError:
             continue
+
         result = await db.execute(
-            select(TokenUsageHourly).where(
-                TokenUsageHourly.instance_id == agg["instance_id"],
-                TokenUsageHourly.agent_id == agg["agent_id"],
-                TokenUsageHourly.hour == current_hour,
+            select(TokenUsageDaily).where(
+                TokenUsageDaily.instance_id == payload.instance_id,
+                TokenUsageDaily.agent_id == item.agent_id,
+                TokenUsageDaily.date == date_dt,
             )
         )
         usage = result.scalar_one_or_none()
+
         if usage is None:
-            db.add(TokenUsageHourly(
-                instance_id=agg["instance_id"],
-                agent_id=agg["agent_id"],
-                hour=current_hour,
-                input_tokens_sum=agg["input"],
-                output_tokens_sum=agg["output"],
-                total_tokens_sum=agg["total"],
-                session_count=agg["count"],
+            db.add(TokenUsageDaily(
+                instance_id=payload.instance_id,
+                agent_id=item.agent_id,
+                date=date_dt,
+                input_tokens_sum=item.input,
+                output_tokens_sum=item.output,
+                cache_read_tokens_sum=item.cache_read,
+                cache_write_tokens_sum=item.cache_write,
+                total_tokens_sum=item.total,
             ))
         else:
-            usage.input_tokens_sum += agg["input"]
-            usage.output_tokens_sum += agg["output"]
-            usage.total_tokens_sum += agg["total"]
-            usage.session_count += agg["count"]
+            usage.input_tokens_sum = item.input
+            usage.output_tokens_sum = item.output
+            usage.cache_read_tokens_sum = item.cache_read
+            usage.cache_write_tokens_sum = item.cache_write
+            usage.total_tokens_sum = item.total
 
     await db.commit()
+    logger.info(f"Daily usage received: {len(payload.items)} items from {payload.instance_id}")
     return {"ok": True}
 
 

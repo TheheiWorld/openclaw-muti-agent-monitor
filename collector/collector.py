@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -88,77 +89,46 @@ def run_cli_command(openclaw_bin: str, args: list[str], timeout: int = 30, env: 
 
 
 def collect_sessions(openclaw_bin: str, env: dict | None = None) -> list[dict]:
-    """采集会话数据 (含 Token 统计)
-
-    openclaw sessions --json 可能输出：
-    - 单个 JSON 对象 { sessions: [...] }
-    - 多个 JSON 对象拼接 (多 agent store 时每个 store 输出一个 JSON 块)
-    - JSON 块之间或末尾可能混入非 JSON 文本 (CLI log/warning 等)
-    """
+    """采集会话数据 (含 Token 统计)"""
     output = run_cli_command(openclaw_bin, ["sessions", "--all-agents", "--json"], timeout=120, env=env)
     if not output:
         logger.info("Sessions command returned no output")
         return []
 
     all_sessions = []
-
-    # 尝试逐块解析 (处理多个 JSON 块拼接的情况)
     decoder = json.JSONDecoder()
     text = output.strip()
     pos = 0
     while pos < len(text):
-        # 跳过空白
         while pos < len(text) and text[pos] in ' \t\n\r':
             pos += 1
         if pos >= len(text):
             break
-        # 跳过非 JSON 内容 (找到下一个 '{' 或 '[')
         if text[pos] not in ('{', '['):
             next_obj = text.find('{', pos)
             next_arr = text.find('[', pos)
             candidates = [c for c in (next_obj, next_arr) if c != -1]
             if not candidates:
-                # 剩余内容中没有 JSON 了
-                if pos < len(text):
-                    skipped = text[pos:pos + 200]
-                    logger.warning(f"Skipping trailing non-JSON content at pos {pos}: {skipped!r}")
                 break
-            next_json = min(candidates)
-            skipped = text[pos:next_json]
-            logger.warning(f"Skipping non-JSON content at pos {pos}: {skipped!r}")
-            pos = next_json
+            pos = min(candidates)
 
         try:
             data, end_pos = decoder.raw_decode(text, pos)
             pos = end_pos
-            # 提取 sessions 数组
             if isinstance(data, dict) and "sessions" in data:
                 all_sessions.extend(data["sessions"])
             elif isinstance(data, dict) and "items" in data:
                 all_sessions.extend(data["items"])
             elif isinstance(data, list):
                 all_sessions.extend(data)
-            else:
-                logger.warning(f"Unexpected JSON structure (keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__})")
-        except json.JSONDecodeError as e:
-            # 当前位置的 '{' 或 '[' 解析失败，跳过这个字符继续
-            logger.warning(f"JSON decode failed at pos {pos}: {e}")
+        except json.JSONDecodeError:
             pos += 1
 
-    if all_sessions:
-        logger.info(f"Collected {len(all_sessions)} sessions")
-    else:
-        logger.warning(f"No sessions parsed from output ({len(output)} bytes): {output[:500]!r}")
     return all_sessions
 
 
 def collect_agents(openclaw_bin: str, env: dict | None = None) -> list[dict]:
-    """采集 Agent 列表
-
-    使用 `openclaw agents list --json`，返回 AgentSummary[] 数组，
-    包含 id, name, isDefault, identityEmoji, identityName 等字段。
-    输出可能包含多个 JSON 块拼接或混入非 JSON 文本。
-    """
+    """采集 Agent 列表"""
     output = run_cli_command(openclaw_bin, ["agents", "list", "--json"], timeout=120, env=env)
     if not output:
         logger.info("Agents command returned no output")
@@ -169,12 +139,10 @@ def collect_agents(openclaw_bin: str, env: dict | None = None) -> list[dict]:
     text = output.strip()
     pos = 0
     while pos < len(text):
-        # 跳过空白
         while pos < len(text) and text[pos] in ' \t\n\r':
             pos += 1
         if pos >= len(text):
             break
-        # 跳过非 JSON 内容
         if text[pos] not in ('{', '['):
             next_obj = text.find('{', pos)
             next_arr = text.find('[', pos)
@@ -195,10 +163,6 @@ def collect_agents(openclaw_bin: str, env: dict | None = None) -> list[dict]:
         except json.JSONDecodeError:
             pos += 1
 
-    if all_agents:
-        logger.info(f"Collected {len(all_agents)} agents")
-    else:
-        logger.warning(f"No agents parsed from output ({len(output)} bytes)")
     return all_agents
 
 
@@ -211,9 +175,8 @@ def collect_version(openclaw_bin: str, env: dict | None = None) -> str:
 
 
 def _get_local_ip() -> str:
-    """获取本机局域网 IP（非 127.0.0.1）"""
+    """获取本机局域网 IP"""
     try:
-        # 通过 UDP 连接外部地址来获取本机出口 IP，不会实际发送数据
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
@@ -221,101 +184,147 @@ def _get_local_ip() -> str:
         return ip
     except Exception:
         pass
-    # fallback: gethostbyname
     try:
         return socket.gethostbyname(socket.gethostname())
     except Exception:
         return "127.0.0.1"
 
 
-def build_heartbeat(config: dict, instance_id: str) -> dict:
-    """构建完整心跳数据"""
-    host = config["openclaw_host"]
-    port = config["openclaw_port"]
-    openclaw_bin = config["openclaw_bin"]
+def calculate_daily_usage(agents: list[dict]) -> list[dict]:
+    """统计昨日的 Token 消耗 (用于长期存档)"""
+    yesterday = datetime.now() - timedelta(days=1)
+    yesterday_date = yesterday.date()
+    yesterday_str = yesterday_date.strftime("%Y-%m-%d")
 
-    # 构造子进程环境变量，指定 HOME 目录使 openclaw CLI 读取正确的数据
-    cli_env = None
-    openclaw_home = config.get("openclaw_home", "")
-    if openclaw_home:
-        cli_env = os.environ.copy()
-        cli_env["HOME"] = openclaw_home
+    results = []
 
-    health = check_health(host, port)
-    sessions_raw = collect_sessions(openclaw_bin, env=cli_env) if health["live"] else []
-    agents_raw = collect_agents(openclaw_bin, env=cli_env) if health["live"] else []
-    version = collect_version(openclaw_bin, env=cli_env) if health["live"] else ""
+    for ag in agents:
+        agent_dir = ag.get("agentDir", "")
+        if not agent_dir or not os.path.isdir(agent_dir):
+            continue
 
-    # 规范化 agent 数据
-    # openclaw agents list --json 返回字段:
-    #   id, name, isDefault, identityEmoji, identityName, identitySource, model, workspace, ...
-    agents = []
-    for ag in agents_raw:
-        identity = ag.get("identity", {}) or {}
-        agents.append({
-            "id": ag.get("id", ""),
-            "name": ag.get("identityName", "") or ag.get("name", "") or identity.get("name", ""),
-            "identity": {
-                "emoji": ag.get("identityEmoji", "") or identity.get("emoji", ""),
-                "theme": identity.get("theme", ""),
-            },
-            "workspace": ag.get("workspace", ""),
-            "agentDir": ag.get("agentDir", ""),
-            "model": ag.get("model", ""),
-        })
+        parent_dir = os.path.dirname(agent_dir)
+        sessions_dir = os.path.join(parent_dir, "sessions")
 
-    # 规范化 session 数据
-    sessions = []
-    for sess in sessions_raw:
-        sessions.append({
-            "key": sess.get("key", ""),
-            "sessionId": sess.get("sessionId", sess.get("session_id", "")),
-            "agentId": sess.get("agentId", sess.get("agent_id", "")),
-            "channel": sess.get("channel", ""),
-            "displayName": sess.get("displayName", sess.get("display_name", "")),
-            "status": sess.get("status", ""),
-            "inputTokens": sess.get("inputTokens", sess.get("input_tokens", 0)) or 0,
-            "outputTokens": sess.get("outputTokens", sess.get("output_tokens", 0)) or 0,
-            "totalTokens": sess.get("totalTokens", sess.get("total_tokens", 0)) or 0,
-            "contextTokens": sess.get("contextTokens", sess.get("context_tokens", 0)) or 0,
-            "estimatedCostUsd": sess.get("estimatedCostUsd", sess.get("estimated_cost_usd", 0)) or 0,
-            "modelProvider": sess.get("modelProvider", sess.get("model_provider", "")),
-            "model": sess.get("model", ""),
-            "startedAt": sess.get("startedAt", sess.get("started_at")),
-            "endedAt": sess.get("endedAt", sess.get("ended_at")),
-            "updatedAt": sess.get("updatedAt", sess.get("updated_at")),
-        })
+        if not os.path.isdir(sessions_dir):
+            continue
 
-    # 获取本机 IP
-    machine_host = config.get("advertise_host", "")
-    if not machine_host:
-        machine_host = _get_local_ip()
+        usage_total = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "total": 0}
 
-    # 获取机器名称
-    try:
-        hostname = socket.gethostname()
-    except Exception:
-        hostname = ""
+        try:
+            for fname in os.listdir(sessions_dir):
+                if ".jsonl" not in fname:
+                    continue
+                fpath = os.path.join(sessions_dir, fname)
+                mtime = os.path.getmtime(fpath)
+                mdate = datetime.fromtimestamp(mtime).date()
 
-    return {
-        "instance_id": instance_id,
-        "instance_name": config["instance_name"],
-        "hostname": hostname,
-        "host": machine_host,
-        "port": port,
-        "version": version,
-        "health": health,
-        "agents": agents,
-        "sessions": sessions,
-        "timestamp": int(time.time()),
-    }
+                if mdate == yesterday_date:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        for line in f:
+                            if '"usage":' in line:
+                                try:
+                                    data = json.loads(line)
+                                    msg = data.get("message", {})
+                                    usage = msg.get("usage") if isinstance(msg, dict) else data.get("usage")
+                                    if usage and isinstance(usage, dict):
+                                        usage_total["input"] += usage.get("input", 0)
+                                        usage_total["output"] += usage.get("output", 0)
+                                        usage_total["cache_read"] += usage.get("cacheRead", 0)
+                                        usage_total["cache_write"] += usage.get("cacheWrite", 0)
+                                        usage_total["total"] += usage.get("totalTokens", 0)
+                                except Exception:
+                                    continue
+        except Exception as e:
+            logger.error(f"Error scanning sessions for agent {ag['id']}: {e}")
+            continue
+
+        if usage_total["total"] > 0:
+            results.append({
+                "agent_id": ag["id"], "date": yesterday_str,
+                **usage_total
+            })
+
+    return results
+
+
+def calculate_hourly_usage(agents: list[dict]) -> list[dict]:
+    """统计今日的小时级 Token 消耗 (用于 Dashboard 实时趋势)"""
+    today_date = datetime.now().date()
+    results = []
+
+    for ag in agents:
+        agent_dir = ag.get("agentDir", "")
+        if not agent_dir or not os.path.isdir(agent_dir):
+            continue
+
+        parent_dir = os.path.dirname(agent_dir)
+        sessions_dir = os.path.join(parent_dir, "sessions")
+
+        if not os.path.isdir(sessions_dir):
+            continue
+
+        # key: "YYYY-MM-DD HH:00:00", value: usage_dict
+        hourly_map = {}
+
+        try:
+            for fname in os.listdir(sessions_dir):
+                if ".jsonl" not in fname:
+                    continue
+                fpath = os.path.join(sessions_dir, fname)
+                mtime = os.path.getmtime(fpath)
+                mdate = datetime.fromtimestamp(mtime).date()
+
+                # 仅处理今日修改过的文件
+                if mdate == today_date:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        for line in f:
+                            if '"usage":' in line:
+                                try:
+                                    data = json.loads(line)
+                                    ts_str = data.get("timestamp")
+                                    if not ts_str:
+                                        continue
+                                    
+                                    # 解析 timestamp 确定小时
+                                    # 格式通常为: 2026-03-22T14:32:24.395Z
+                                    dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                                    if dt.date() != today_date:
+                                        continue
+                                    
+                                    hour_str = dt.strftime("%Y-%m-%d %H:00:00")
+                                    
+                                    msg = data.get("message", {})
+                                    usage = msg.get("usage") if isinstance(msg, dict) else data.get("usage")
+                                    
+                                    if usage and isinstance(usage, dict):
+                                        if hour_str not in hourly_map:
+                                            hourly_map[hour_str] = {"input": 0, "output": 0, "total": 0}
+                                        
+                                        hourly_map[hour_str]["input"] += usage.get("input", 0)
+                                        hourly_map[hour_str]["output"] += usage.get("output", 0)
+                                        hourly_map[hour_str]["total"] += usage.get("totalTokens", 0)
+                                except Exception:
+                                    continue
+        except Exception as e:
+            logger.error(f"Error scanning hourly sessions for agent {ag['id']}: {e}")
+            continue
+
+        for hour_str, usage in hourly_map.items():
+            results.append({
+                "agent_id": ag["id"],
+                "hour": hour_str,
+                **usage
+            })
+
+    return results
 
 
 DOC_FILES = ["SOUL.md", "AGENTS.md", "IDENTITY.md", "USER.md", "TOOLS.md"]
 
 
 def sync_agent_docs(config: dict, instance_id: str, agents: list[dict], api_key: str) -> bool:
-    """读取每个 agent 的文档文件并同步到 server，优先从 workspace 查找，其次从 agentDir"""
+    """读取每个 agent 的文档文件并同步到 server"""
     docs_payload = []
     for ag in agents:
         workspace = ag.get("workspace", "")
@@ -335,7 +344,6 @@ def sync_agent_docs(config: dict, instance_id: str, agents: list[dict], api_key:
             docs_payload.append({"agentId": ag["id"], "files": files})
 
     if not docs_payload:
-        logger.info("No agent docs to sync")
         return True
 
     payload = {"instance_id": instance_id, "agents": docs_payload}
@@ -345,12 +353,7 @@ def sync_agent_docs(config: dict, instance_id: str, agents: list[dict], api_key:
         headers["X-API-Key"] = api_key
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        if resp.status_code == 200:
-            logger.info(f"Agent docs synced: {len(docs_payload)} agents")
-            return True
-        else:
-            logger.warning(f"Agent docs sync failed: {resp.status_code}: {resp.text[:200]}")
-            return False
+        return resp.status_code == 200
     except Exception as e:
         logger.warning(f"Agent docs sync error: {e}")
         return False
@@ -367,14 +370,23 @@ def send_heartbeat(server_url: str, heartbeat: dict, api_key: str = "") -> bool:
         if resp.status_code == 200:
             data = resp.json()
             return data.get("ok", False)
-        else:
-            logger.warning(f"Server returned {resp.status_code}: {resp.text[:200]}")
-            return False
-    except requests.ConnectionError:
-        logger.warning(f"Cannot connect to server: {server_url}")
         return False
     except Exception as e:
         logger.warning(f"Send heartbeat error: {e}")
+        return False
+
+
+def send_daily_usage(server_url: str, payload: dict, api_key: str = "") -> bool:
+    """上报每日统计数据"""
+    url = f"{server_url}/api/collector/daily-usage"
+    headers = {}
+    if api_key:
+        headers["X-API-Key"] = api_key
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        return resp.status_code == 200
+    except Exception as e:
+        logger.warning(f"Send daily usage error: {e}")
         return False
 
 
@@ -382,8 +394,6 @@ def main():
     config = load_config()
     instance_id = get_or_create_instance_id()
 
-    # 读取配置间隔 (秒)
-    # 优先读取新配置，不存在则回退
     heartbeat_interval = config.get("heartbeat_interval", config.get("collect_interval", 60))
     agents_interval = config.get("agents_interval", config.get("collect_interval", 120))
     sessions_interval = config.get("sessions_interval", config.get("collect_interval", 60))
@@ -392,16 +402,14 @@ def main():
 
     logger.info(f"OpenClaw Monitor Collector started")
     logger.info(f"  Instance ID: {instance_id}")
-    logger.info(f"  Instance Name: {config['instance_name']}")
-    logger.info(f"  Server URL: {config['server_url']}")
     logger.info(f"  Intervals: Heartbeat={heartbeat_interval}s, Agents={agents_interval}s, Sessions={sessions_interval}s, DocSync={doc_sync_interval}s")
-    logger.info(f"  OpenClaw: {config['openclaw_host']}:{config['openclaw_port']}")
 
     running = True
 
     # 数据缓存
     cached_agents = []
     cached_sessions = []
+    cached_hourly_usage = []
     cached_health = {"live": False, "ready": False}
     cached_version = ""
 
@@ -410,6 +418,7 @@ def main():
     last_agents = 0
     last_sessions = 0
     last_doc_sync = 0
+    last_daily_stats_date = ""
 
     def handle_signal(signum, frame):
         nonlocal running
@@ -428,7 +437,6 @@ def main():
         cli_env = os.environ.copy()
         cli_env["HOME"] = openclaw_home
 
-    # 本机信息 (只需获取一次)
     machine_host = config.get("advertise_host", "")
     if not machine_host:
         machine_host = _get_local_ip()
@@ -439,6 +447,7 @@ def main():
 
     while running:
         now = time.time()
+        now_dt = datetime.now()
         should_send = False
 
         try:
@@ -454,17 +463,13 @@ def main():
             if now - last_agents >= agents_interval:
                 if cached_health["live"]:
                     agents_raw = collect_agents(openclaw_bin, env=cli_env)
-                    # 规范化 agent 数据
                     new_agents = []
                     for ag in agents_raw:
                         identity = ag.get("identity", {}) or {}
                         new_agents.append({
                             "id": ag.get("id", ""),
                             "name": ag.get("identityName", "") or ag.get("name", "") or identity.get("name", ""),
-                            "identity": {
-                                "emoji": ag.get("identityEmoji", "") or identity.get("emoji", ""),
-                                "theme": identity.get("theme", ""),
-                            },
+                            "identity": {"emoji": ag.get("identityEmoji", "") or identity.get("emoji", ""), "theme": identity.get("theme", "")},
                             "workspace": ag.get("workspace", ""),
                             "agentDir": ag.get("agentDir", ""),
                             "model": ag.get("model", ""),
@@ -473,11 +478,10 @@ def main():
                 last_agents = now
                 should_send = True
 
-            # 3. 检查 Sessions
+            # 3. 检查 Sessions (同时计算今日小时级 Token)
             if now - last_sessions >= sessions_interval:
                 if cached_health["live"]:
                     sessions_raw = collect_sessions(openclaw_bin, env=cli_env)
-                    # 规范化 session 数据
                     new_sessions = []
                     for sess in sessions_raw:
                         new_sessions.append({
@@ -489,6 +493,8 @@ def main():
                             "status": sess.get("status", ""),
                             "inputTokens": sess.get("inputTokens", sess.get("input_tokens", 0)) or 0,
                             "outputTokens": sess.get("outputTokens", sess.get("output_tokens", 0)) or 0,
+                            "cacheReadTokens": sess.get("cacheReadTokens", sess.get("cache_read_tokens", 0)) or 0,
+                            "cacheWriteTokens": sess.get("cacheWriteTokens", sess.get("cache_write_tokens", 0)) or 0,
                             "totalTokens": sess.get("totalTokens", sess.get("total_tokens", 0)) or 0,
                             "contextTokens": sess.get("contextTokens", sess.get("context_tokens", 0)) or 0,
                             "estimatedCostUsd": sess.get("estimatedCostUsd", sess.get("estimated_cost_usd", 0)) or 0,
@@ -499,51 +505,47 @@ def main():
                             "updatedAt": sess.get("updatedAt", sess.get("updated_at")),
                         })
                     cached_sessions = new_sessions
+                    
+                    # 分析今日小时级数据
+                    if cached_agents:
+                        cached_hourly_usage = calculate_hourly_usage(cached_agents)
+
                 last_sessions = now
                 should_send = True
 
-            # 4. 发送数据 (如果任一部分更新了)
+            # 4. 发送数据
             if should_send:
                 heartbeat_payload = {
                     "instance_id": instance_id,
                     "instance_name": config["instance_name"],
-                    "hostname": hostname,
-                    "host": machine_host,
-                    "port": port,
-                    "version": cached_version,
-                    "health": cached_health,
+                    "hostname": hostname, "host": machine_host, "port": port,
+                    "version": cached_version, "health": cached_health,
                     "agents": cached_agents,
                     "sessions": cached_sessions,
+                    "hourly_usage": cached_hourly_usage,
                     "timestamp": int(now),
                 }
+                send_heartbeat(config["server_url"], heartbeat_payload, api_key)
 
-                total_tokens = sum(s.get("totalTokens", 0) for s in cached_sessions)
-                ok = send_heartbeat(config["server_url"], heartbeat_payload, api_key)
-                if ok:
-                    logger.info(
-                        f"Heartbeat sent: status={cached_health}, "
-                        f"agents={len(cached_agents)}, sessions={len(cached_sessions)}, "
-                        f"tokens={total_tokens}"
-                    )
-                else:
-                    logger.warning("Heartbeat send failed")
-
-            # 5. 定时同步 agent 文档
+            # 5. 同步 agent 文档
             if now - last_doc_sync >= doc_sync_interval:
-                if cached_agents:
-                    try:
-                        sync_agent_docs(config, instance_id, cached_agents, api_key)
-                        last_doc_sync = now
-                    except Exception as e:
-                        logger.error(f"Doc sync error: {e}")
-                else:
-                    # 如果没有 agent，也重置时间，避免在没有 agent 的情况下频繁重试
+                if cached_agents and sync_agent_docs(config, instance_id, cached_agents, api_key):
                     last_doc_sync = now
 
+            # 6. 每日凌晨 1 点统计昨日 Token 消耗
+            current_date_str = now_dt.strftime("%Y-%m-%d")
+            if now_dt.hour == 1 and last_daily_stats_date != current_date_str:
+                if cached_agents:
+                    stats = calculate_daily_usage(cached_agents)
+                    if stats:
+                        payload = {"instance_id": instance_id, "items": stats}
+                        if send_daily_usage(config["server_url"], payload, api_key):
+                            last_daily_stats_date = current_date_str
+                    else:
+                        last_daily_stats_date = current_date_str
         except Exception as e:
             logger.error(f"Loop error: {e}")
 
-        # 每秒 tick 一次，处理颗粒度更细的定时任务
         time.sleep(1)
         if not running:
             break

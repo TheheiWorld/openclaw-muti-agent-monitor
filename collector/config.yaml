@@ -8,6 +8,10 @@ api_key: "123456"
 
 # 实例标识 (每台机器唯一)
 instance_name: "prod-01"
+openclaw_host: "localhost"
+openclaw_port:  18789
+openclaw_bin: "/Users/juststand/.nvm/versions/node/v22.22.0/bin/openclaw"
+
 
 # 采集间隔 (秒)
 heartbeat_interval: 60

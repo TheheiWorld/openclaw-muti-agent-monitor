@@ -120,6 +120,22 @@ onMounted(fetchData)
             <span class="info-value mono highlight">{{ formatTokens(agent.total_tokens) }}</span>
           </div>
           <div class="info-item">
+            <span class="info-label">{{ t('agentDetail.fieldInput') }}</span>
+            <span class="info-value mono">{{ formatTokens(agent.input_tokens) }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">{{ t('agentDetail.fieldOutput') }}</span>
+            <span class="info-value mono">{{ formatTokens(agent.output_tokens) }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">{{ t('agentDetail.fieldCacheRead') }}</span>
+            <span class="info-value mono">{{ formatTokens(agent.cache_read_tokens) }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">{{ t('agentDetail.fieldCacheWrite') }}</span>
+            <span class="info-value mono">{{ formatTokens(agent.cache_write_tokens) }}</span>
+          </div>
+          <div class="info-item">
             <span class="info-label">{{ t('agentDetail.fieldCost') }}</span>
             <span class="info-value mono">${{ agent.estimated_cost_usd }}</span>
           </div>
@@ -164,9 +180,6 @@ onMounted(fetchData)
                 <th scope="col">{{ t('detail.sessionColChannel') }}</th>
                 <th scope="col">{{ t('detail.sessionColUser') }}</th>
                 <th scope="col">{{ t('detail.sessionColStatus') }}</th>
-                <th scope="col" class="right">{{ t('detail.sessionColInput') }}</th>
-                <th scope="col" class="right">{{ t('detail.sessionColOutput') }}</th>
-                <th scope="col" class="right">{{ t('detail.sessionColTotal') }}</th>
                 <th scope="col">{{ t('detail.sessionColModel') }}</th>
                 <th scope="col">{{ t('detail.sessionColUpdated') }}</th>
               </tr>
@@ -177,9 +190,6 @@ onMounted(fetchData)
                 <td class="cell-mono">{{ row.channel || '-' }}</td>
                 <td class="truncate" :title="row.display_name">{{ row.display_name || '-' }}</td>
                 <td><StatusBadge :status="row.status" /></td>
-                <td class="right cell-mono">{{ formatTokens(row.input_tokens) }}</td>
-                <td class="right cell-mono">{{ formatTokens(row.output_tokens) }}</td>
-                <td class="right cell-mono highlight">{{ formatTokens(row.total_tokens) }}</td>
                 <td class="cell-mono truncate" :title="row.model">{{ row.model || '-' }}</td>
                 <td class="cell-time">{{ formatTime(row.updated_at) }}</td>
               </tr>

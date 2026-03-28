@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import get_current_user
 from ..config import AGENT_DOCS_DIR
 from ..database import get_db
-from ..models import Agent, Session, Instance, TokenUsageHourly
+from ..models import Agent, Session, Instance, TokenUsageDaily
 
 AGENT_OFFLINE_MINUTES = 30
 
@@ -39,16 +39,20 @@ async def list_agents(instance_id: str | None = None, db: AsyncSession = Depends
         )
         instance_name = inst_result.scalar() or ag.instance_id
 
-        # session count + total tokens
-        sess_stats = (await db.execute(
-            select(
-                func.count().label("session_count"),
-                func.coalesce(func.sum(Session.total_tokens), 0).label("total_tokens"),
-            ).where(
+        # session count from Session table, tokens from TokenUsageDaily
+        sess_count = (await db.execute(
+            select(func.count(Session.id)).where(
                 Session.instance_id == ag.instance_id,
                 Session.agent_id == ag.agent_id,
             )
-        )).one()
+        )).scalar() or 0
+
+        token_total = (await db.execute(
+            select(func.coalesce(func.sum(TokenUsageDaily.total_tokens_sum), 0)).where(
+                TokenUsageDaily.instance_id == ag.instance_id,
+                TokenUsageDaily.agent_id == ag.agent_id,
+            )
+        )).scalar() or 0
 
         items.append({
             "agent_id": ag.agent_id,
@@ -58,8 +62,8 @@ async def list_agents(instance_id: str | None = None, db: AsyncSession = Depends
             "identity_emoji": ag.identity_emoji,
             "identity_theme": ag.identity_theme,
             "status": _agent_status(ag.updated_at),
-            "session_count": sess_stats.session_count,
-            "total_tokens": sess_stats.total_tokens,
+            "session_count": sess_count,
+            "total_tokens": token_total,
             "updated_at": ag.updated_at.isoformat() if ag.updated_at else None,
         })
 
@@ -81,15 +85,25 @@ async def get_agent(agent_id: str, instance_id: str, db: AsyncSession = Depends(
         select(Instance.name).where(Instance.instance_id == ag.instance_id)
     )).scalar() or ag.instance_id
 
-    sess_stats = (await db.execute(
+    sess_count = (await db.execute(
+        select(func.count(Session.id)).where(Session.instance_id == ag.instance_id, Session.agent_id == ag.agent_id)
+    )).scalar() or 0
+
+    token_stats = (await db.execute(
         select(
-            func.count().label("session_count"),
-            func.coalesce(func.sum(Session.total_tokens), 0).label("total_tokens"),
-            func.coalesce(func.sum(Session.input_tokens), 0).label("input_tokens"),
-            func.coalesce(func.sum(Session.output_tokens), 0).label("output_tokens"),
-            func.coalesce(func.sum(Session.estimated_cost_usd), 0).label("cost"),
-        ).where(Session.instance_id == ag.instance_id, Session.agent_id == ag.agent_id)
+            func.coalesce(func.sum(TokenUsageDaily.total_tokens_sum), 0).label("total_tokens"),
+            func.coalesce(func.sum(TokenUsageDaily.input_tokens_sum), 0).label("input_tokens"),
+            func.coalesce(func.sum(TokenUsageDaily.output_tokens_sum), 0).label("output_tokens"),
+            func.coalesce(func.sum(TokenUsageDaily.cache_read_tokens_sum), 0).label("cache_read_tokens"),
+            func.coalesce(func.sum(TokenUsageDaily.cache_write_tokens_sum), 0).label("cache_write_tokens"),
+        ).where(TokenUsageDaily.instance_id == ag.instance_id, TokenUsageDaily.agent_id == ag.agent_id)
     )).one()
+
+    # cost still aggregated from sessions as it's updated in heartbeat
+    cost_total = (await db.execute(
+        select(func.coalesce(func.sum(Session.estimated_cost_usd), 0))
+        .where(Session.instance_id == ag.instance_id, Session.agent_id == ag.agent_id)
+    )).scalar() or 0
 
     return {
         "agent_id": ag.agent_id,
@@ -102,11 +116,13 @@ async def get_agent(agent_id: str, instance_id: str, db: AsyncSession = Depends(
         "agent_dir": ag.agent_dir,
         "model": ag.model,
         "status": _agent_status(ag.updated_at),
-        "session_count": sess_stats.session_count,
-        "total_tokens": sess_stats.total_tokens,
-        "input_tokens": sess_stats.input_tokens,
-        "output_tokens": sess_stats.output_tokens,
-        "estimated_cost_usd": round(sess_stats.cost, 4),
+        "session_count": sess_count,
+        "total_tokens": token_stats.total_tokens,
+        "input_tokens": token_stats.input_tokens,
+        "output_tokens": token_stats.output_tokens,
+        "cache_read_tokens": token_stats.cache_read_tokens,
+        "cache_write_tokens": token_stats.cache_write_tokens,
+        "estimated_cost_usd": round(cost_total, 4),
         "updated_at": ag.updated_at.isoformat() if ag.updated_at else None,
     }
 
