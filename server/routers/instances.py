@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import get_current_user
 from .agents import _agent_status
 from ..database import get_db
-from ..models import Instance, Agent, Session, TokenUsageHourly
+from ..models import Instance, Agent, Session, TokenUsageHourly, TokenUsageDaily
 
 router = APIRouter(prefix="/api/instances", tags=["instances"], dependencies=[Depends(get_current_user)])
 
@@ -26,10 +26,10 @@ async def list_instances(status: str | None = None, db: AsyncSession = Depends(g
             select(func.count()).where(Agent.instance_id == inst.instance_id)
         )).scalar() or 0
 
-        # total tokens
+        # total tokens from TokenUsageDaily
         total_tokens = (await db.execute(
-            select(func.coalesce(func.sum(Session.total_tokens), 0)).where(
-                Session.instance_id == inst.instance_id
+            select(func.coalesce(func.sum(TokenUsageDaily.total_tokens_sum), 0)).where(
+                TokenUsageDaily.instance_id == inst.instance_id
             )
         )).scalar() or 0
 
@@ -69,15 +69,21 @@ async def get_instance(instance_id: str, db: AsyncSession = Depends(get_db)):
 
     agent_items = []
     for ag in agents:
-        sess_stats = (await db.execute(
-            select(
-                func.count().label("session_count"),
-                func.coalesce(func.sum(Session.total_tokens), 0).label("total_tokens"),
-            ).where(
+        # Session count from Session table
+        sess_count = (await db.execute(
+            select(func.count(Session.id)).where(
                 Session.instance_id == instance_id,
                 Session.agent_id == ag.agent_id,
             )
-        )).one()
+        )).scalar() or 0
+
+        # Tokens from TokenUsageDaily
+        agent_total_tokens = (await db.execute(
+            select(func.coalesce(func.sum(TokenUsageDaily.total_tokens_sum), 0)).where(
+                TokenUsageDaily.instance_id == instance_id,
+                TokenUsageDaily.agent_id == ag.agent_id,
+            )
+        )).scalar() or 0
 
         agent_items.append({
             "agent_id": ag.agent_id,
@@ -85,8 +91,8 @@ async def get_instance(instance_id: str, db: AsyncSession = Depends(get_db)):
             "identity_emoji": ag.identity_emoji,
             "identity_theme": ag.identity_theme,
             "status": _agent_status(ag.updated_at),
-            "session_count": sess_stats.session_count,
-            "total_tokens": sess_stats.total_tokens,
+            "session_count": sess_count,
+            "total_tokens": agent_total_tokens,
             "updated_at": ag.updated_at.isoformat() if ag.updated_at else None,
         })
 
@@ -114,6 +120,9 @@ async def get_instance(instance_id: str, db: AsyncSession = Depends(get_db)):
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     } for s in sessions]
 
+    # Calculate instance total tokens from agent items
+    instance_total_tokens = sum(a["total_tokens"] for a in agent_items)
+
     agent_items.sort(key=lambda x: x["total_tokens"], reverse=True)
 
     return {
@@ -126,6 +135,7 @@ async def get_instance(instance_id: str, db: AsyncSession = Depends(get_db)):
         "version": inst.version,
         "last_heartbeat": inst.last_heartbeat.isoformat() if inst.last_heartbeat else None,
         "created_at": inst.created_at.isoformat() if inst.created_at else None,
+        "total_tokens": instance_total_tokens,
         "agents": agent_items,
         "sessions": session_items,
     }
