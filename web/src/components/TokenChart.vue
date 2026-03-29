@@ -18,7 +18,7 @@ const { t } = useI18n()
 
 const props = defineProps<{
   title?: string
-  data: Array<{ hour: string; input_tokens: number; output_tokens: number; total_tokens: number }>
+  data: Array<{ hour?: string; date?: string; input_tokens: number; output_tokens: number; total_tokens: number }>
   type?: 'line' | 'bar'
 }>()
 
@@ -75,7 +75,13 @@ const option = computed(() => ({
   xAxis: {
     type: 'category',
     data: props.data.map(d => {
-      const date = new Date(d.hour)
+      const dateStr = d.date || d.hour || ''
+      const date = new Date(dateStr)
+      if (d.date) {
+        // Daily format: MM/DD
+        return `${date.getMonth() + 1}/${date.getDate()}`
+      }
+      // Hourly format: MM/DD HH:00
       return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:00`
     }),
     axisLabel: {
