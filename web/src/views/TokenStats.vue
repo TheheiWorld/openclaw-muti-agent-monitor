@@ -14,7 +14,8 @@ use([CanvasRenderer, BarChart, TitleComponent, TooltipComponent, GridComponent])
 
 const { t } = useI18n()
 const loading = ref(true)
-const timeRange = ref('24h')
+const dimension = ref('today') // 'today' or 't1'
+const timeRange = ref('7d')
 const summary = ref<any>({
   total_input_tokens: 0,
   total_output_tokens: 0,
@@ -24,6 +25,11 @@ const summary = ref<any>({
 })
 const trend = ref<any[]>([])
 const ranksToday = ref<any[]>([])
+
+const dimensionOptions = [
+  { value: 'today', label: '今日实时' },
+  { value: 't1', label: '历史分析 (T-1)' },
+]
 
 const timeRangeKeys = [
   { value: '24h', key: 'tokenStats.range24h' },
@@ -40,14 +46,17 @@ const formatTokens = (n: number) => {
 const fetchData = async () => {
   loading.value = true
   try {
-    const [summaryRes, trendRes, ranksTodayRes] = await Promise.all([
-      getTokenSummary(),
-      getTokenTrend({ range: timeRange.value }),
-      getTokenRanksToday(),
-    ])
-    summary.value = summaryRes.data
-    trend.value = trendRes.data.points
-    ranksToday.value = ranksTodayRes.data
+    if (dimension.value === 'today') {
+      const ranksTodayRes = await getTokenRanksToday()
+      ranksToday.value = ranksTodayRes.data
+    } else {
+      const [summaryRes, trendRes] = await Promise.all([
+        getTokenSummary(),
+        getTokenTrend({ range: timeRange.value }),
+      ])
+      summary.value = summaryRes.data
+      trend.value = trendRes.data.points
+    }
   } catch (e) {
     console.error('Failed to load token stats', e)
   } finally {
@@ -116,7 +125,7 @@ const agentBarOption = () => ({
 })
 
 onMounted(fetchData)
-watch(timeRange, fetchData)
+watch([dimension, timeRange], fetchData)
 </script>
 
 <template>
@@ -129,122 +138,146 @@ watch(timeRange, fetchData)
         </h1>
         <p class="page-desc">// {{ t('tokenStats.desc') }}</p>
       </div>
-      <div class="filter-group" role="radiogroup">
-        <button
-          v-for="r in timeRangeKeys"
-          :key="r.value"
-          role="radio"
-          :aria-checked="timeRange === r.value"
-          class="filter-btn"
-          :class="{ active: timeRange === r.value }"
-          @click="timeRange = r.value"
-        >
-          {{ t(r.key) }}
-        </button>
+
+      <div class="header-controls">
+        <div class="dimension-toggle">
+          <button
+            v-for="opt in dimensionOptions"
+            :key="opt.value"
+            class="toggle-btn"
+            :class="{ active: dimension === opt.value }"
+            @click="dimension = opt.value"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+
+        <div v-if="dimension === 't1'" class="filter-group" role="radiogroup">
+          <button
+            v-for="r in timeRangeKeys"
+            :key="r.value"
+            role="radio"
+            :aria-checked="timeRange === r.value"
+            class="filter-btn"
+            :class="{ active: timeRange === r.value }"
+            @click="timeRange = r.value"
+          >
+            {{ t(r.key) }}
+          </button>
+        </div>
       </div>
     </header>
 
-    <section class="summary-grid">
-      <article class="summary-card">
-        <div class="summary-pixel-bar red" aria-hidden="true"></div>
-        <div class="summary-value">{{ formatTokens(summary.total_input_tokens) }}</div>
-        <div class="summary-label">{{ t('tokenStats.inputTokens') }}</div>
-      </article>
-      <article class="summary-card">
-        <div class="summary-pixel-bar green" aria-hidden="true"></div>
-        <div class="summary-value">{{ formatTokens(summary.total_output_tokens) }}</div>
-        <div class="summary-label">{{ t('tokenStats.outputTokens') }}</div>
-      </article>
-      <article class="summary-card">
-        <div class="summary-pixel-bar black" aria-hidden="true"></div>
-        <div class="summary-value">{{ formatTokens(summary.total_tokens) }}</div>
-        <div class="summary-label">{{ t('tokenStats.totalTokens') }}</div>
-      </article>
-    </section>
-
-    <section class="panel trend-panel">
-      <div class="panel-header">
-        <h2 class="panel-title"><span class="panel-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.trendTitle') }}</h2>
-      </div>
-      <div class="chart-body" v-if="trend.length > 0"><TokenChart :data="trend" /></div>
-      <div v-else class="empty-state" role="status"><span>{{ t('tokenStats.noTrend') }}</span></div>
-    </section>
-
-    <section class="section">
-      <div class="section-header">
-        <h2 class="section-title"><span class="section-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.rankAgentToday') }}</h2>
-      </div>
-      <div class="table-panel">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th scope="col">{{ t('tokenStats.colAgent') }}</th>
-              <th scope="col">{{ t('tokenStats.colInstance') }}</th>
-              <th scope="col" class="right">{{ t('tokenStats.colInput') }}</th>
-              <th scope="col" class="right">{{ t('tokenStats.colOutput') }}</th>
-              <th scope="col" class="right">{{ t('tokenStats.colTotal') }}</th>
-            </tr>
-          </thead>
-          <tbody v-if="ranksToday.length > 0">
-            <tr v-for="row in ranksToday" :key="`${row.instance_id}-${row.agent_id}`">
-              <td class="cell-name">{{ row.agent_name }}</td>
-              <td class="cell-mono">{{ row.instance_name }}</td>
-              <td class="right cell-mono">{{ formatTokens(row.input_tokens) }}</td>
-              <td class="right cell-mono">{{ formatTokens(row.output_tokens) }}</td>
-              <td class="right cell-mono highlight">{{ formatTokens(row.total_tokens) }}</td>
-            </tr>
-          </tbody>
-          <tbody v-else>
-            <tr>
-              <td colspan="5" class="empty-state-sm">{{ t('tokenStats.noData') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <div class="rankings-grid">
-      <section class="panel">
-        <div class="panel-header">
-          <h2 class="panel-title"><span class="panel-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.rankInstance') }}</h2>
+    <!-- Today's View (Real-time) -->
+    <template v-if="dimension === 'today'">
+      <section class="section">
+        <div class="section-header">
+          <h2 class="section-title"><span class="section-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.rankAgentToday') }}</h2>
+          <span class="status-indicator">
+            <span class="pulse-dot"></span> 实时同步中
+          </span>
         </div>
-        <div class="chart-body-sm" v-if="summary.by_instance.length > 0">
-          <v-chart :option="instanceBarOption()" autoresize style="height: 100%; width: 100%" />
+        <div class="table-panel">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col">{{ t('tokenStats.colAgent') }}</th>
+                <th scope="col">{{ t('tokenStats.colInstance') }}</th>
+                <th scope="col" class="right">{{ t('tokenStats.colInput') }}</th>
+                <th scope="col" class="right">{{ t('tokenStats.colOutput') }}</th>
+                <th scope="col" class="right">{{ t('tokenStats.colTotal') }}</th>
+              </tr>
+            </thead>
+            <tbody v-if="ranksToday.length > 0">
+              <tr v-for="row in ranksToday" :key="`${row.instance_id}-${row.agent_id}`">
+                <td class="cell-name">{{ row.agent_name }}</td>
+                <td class="cell-mono">{{ row.instance_name }}</td>
+                <td class="right cell-mono">{{ formatTokens(row.input_tokens) }}</td>
+                <td class="right cell-mono">{{ formatTokens(row.output_tokens) }}</td>
+                <td class="right cell-mono highlight">{{ formatTokens(row.total_tokens) }}</td>
+              </tr>
+            </tbody>
+            <tbody v-else>
+              <tr>
+                <td colspan="5" class="empty-state-sm">{{ t('tokenStats.noData') }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div v-else class="empty-state-sm" role="status"><span>{{ t('tokenStats.noData') }}</span></div>
       </section>
-      <section class="panel">
-        <div class="panel-header">
-          <h2 class="panel-title"><span class="panel-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.rankAgent') }}</h2>
-        </div>
-        <div class="chart-body-sm" v-if="summary.by_agent.length > 0">
-          <v-chart :option="agentBarOption()" autoresize style="height: 100%; width: 100%" />
-        </div>
-        <div v-else class="empty-state-sm" role="status"><span>{{ t('tokenStats.noData') }}</span></div>
-      </section>
-    </div>
+    </template>
 
-    <section class="section detail-section">
-      <div class="section-header">
-        <h2 class="section-title"><span class="section-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.detailTitle') }}</h2>
+    <!-- T-1 View (Historical Analysis) -->
+    <template v-else>
+      <section class="summary-grid">
+        <article class="summary-card">
+          <div class="summary-pixel-bar red" aria-hidden="true"></div>
+          <div class="summary-value">{{ formatTokens(summary.total_input_tokens) }}</div>
+          <div class="summary-label">{{ t('tokenStats.inputTokens') }}</div>
+        </article>
+        <article class="summary-card">
+          <div class="summary-pixel-bar green" aria-hidden="true"></div>
+          <div class="summary-value">{{ formatTokens(summary.total_output_tokens) }}</div>
+          <div class="summary-label">{{ t('tokenStats.outputTokens') }}</div>
+        </article>
+        <article class="summary-card">
+          <div class="summary-pixel-bar black" aria-hidden="true"></div>
+          <div class="summary-value">{{ formatTokens(summary.total_tokens) }}</div>
+          <div class="summary-label">{{ t('tokenStats.totalTokens') }}</div>
+        </article>
+      </section>
+
+      <section class="panel trend-panel">
+        <div class="panel-header">
+          <h2 class="panel-title"><span class="panel-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.trendTitle') }}</h2>
+        </div>
+        <div class="chart-body" v-if="trend.length > 0"><TokenChart :data="trend" /></div>
+        <div v-else class="empty-state" role="status"><span>{{ t('tokenStats.noTrend') }}</span></div>
+      </section>
+
+      <div class="rankings-grid">
+        <section class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title"><span class="panel-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.rankInstance') }}</h2>
+          </div>
+          <div class="chart-body-sm" v-if="summary.by_instance.length > 0">
+            <v-chart :option="instanceBarOption()" autoresize style="height: 100%; width: 100%" />
+          </div>
+          <div v-else class="empty-state-sm" role="status"><span>{{ t('tokenStats.noData') }}</span></div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title"><span class="panel-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.rankAgent') }}</h2>
+          </div>
+          <div class="chart-body-sm" v-if="summary.by_agent.length > 0">
+            <v-chart :option="agentBarOption()" autoresize style="height: 100%; width: 100%" />
+          </div>
+          <div v-else class="empty-state-sm" role="status"><span>{{ t('tokenStats.noData') }}</span></div>
+        </section>
       </div>
-      <div class="table-panel">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th scope="col">{{ t('tokenStats.colInstance') }}</th>
-              <th scope="col" class="right">{{ t('tokenStats.colTokens') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in summary.by_instance" :key="row.instance_id">
-              <td class="cell-name">{{ row.instance_name }}</td>
-              <td class="right cell-mono highlight">{{ formatTokens(row.total_tokens) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+
+      <section class="section detail-section">
+        <div class="section-header">
+          <h2 class="section-title"><span class="section-pixel" aria-hidden="true">▸</span> {{ t('tokenStats.detailTitle') }}</h2>
+        </div>
+        <div class="table-panel">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th scope="col">{{ t('tokenStats.colInstance') }}</th>
+                <th scope="col" class="right">{{ t('tokenStats.colTokens') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in summary.by_instance" :key="row.instance_id">
+                <td class="cell-name">{{ row.instance_name }}</td>
+                <td class="right cell-mono highlight">{{ formatTokens(row.total_tokens) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -256,11 +289,16 @@ watch(timeRange, fetchData)
 .title-pixel { color: var(--accent); font-size: 16px; }
 .page-desc { font-size: 13px; color: var(--text-muted); margin-top: var(--space-1); font-family: var(--font-mono); }
 
-.filter-group { display: flex; border: 2px solid var(--border-strong); flex-shrink: 0; }
-.filter-btn { padding: var(--space-2) var(--space-3); border: none; border-right: 2px solid var(--border-strong); background: var(--bg-surface); color: var(--text-secondary); font-family: var(--font-pixel); font-size: 10px; cursor: pointer; transition: all var(--duration-fast) ease; }
+.header-controls { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-3); }
+
+.dimension-toggle { display: flex; background: var(--bg-surface); border: 2px solid var(--border-strong); padding: 2px; }
+.toggle-btn { padding: var(--space-1) var(--space-4); border: none; background: transparent; color: var(--text-muted); font-family: var(--font-pixel); font-size: 11px; cursor: pointer; transition: all 0.2s ease; }
+.toggle-btn.active { background: var(--text-primary); color: white; }
+
+.filter-group { display: flex; border: 2px solid var(--border-strong); }
+.filter-btn { padding: var(--space-1) var(--space-3); border: none; border-right: 2px solid var(--border-strong); background: var(--bg-surface); color: var(--text-secondary); font-family: var(--font-pixel); font-size: 10px; cursor: pointer; transition: all var(--duration-fast) ease; }
 .filter-btn:last-child { border-right: none; }
 .filter-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.filter-btn:active { background: var(--bg-active); }
 .filter-btn.active { color: white; background: var(--text-primary); }
 
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6); }
@@ -288,9 +326,13 @@ watch(timeRange, fetchData)
 
 .section { margin-bottom: var(--space-6); }
 .detail-section { margin-top: var(--space-4); }
-.section-header { display: flex; align-items: center; margin-bottom: var(--space-3); }
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
 .section-title { display: flex; align-items: center; gap: var(--space-2); font-size: 15px; color: var(--text-primary); }
 .section-pixel { color: var(--accent); }
+
+.status-indicator { display: flex; align-items: center; gap: var(--space-2); font-size: 11px; color: var(--text-muted); font-family: var(--font-pixel); }
+.pulse-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 0 rgba(27, 135, 63, 0.4); animation: pulse 2s infinite; }
+@keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(27, 135, 63, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(27, 135, 63, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(27, 135, 63, 0); } }
 
 .table-panel { background: var(--bg-surface); border: 2px solid var(--border); overflow: hidden; }
 .data-table { width: 100%; border-collapse: collapse; }
@@ -306,5 +348,5 @@ watch(timeRange, fetchData)
 .cell-mono { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
 .highlight { color: var(--accent) !important; font-weight: 600; }
 
-@media (max-width: 768px) { .page-header { flex-direction: column; } .page-title { font-size: 18px; } .rankings-grid { grid-template-columns: 1fr; } }
+@media (max-width: 768px) { .page-header { flex-direction: column; } .page-title { font-size: 18px; } .rankings-grid { grid-template-columns: 1fr; } .header-controls { align-items: flex-start; } }
 </style>
