@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from .config import HEARTBEAT_TIMEOUT_SECONDS, STATUS_CHECK_INTERVAL, SERVER_PORT
 from .database import init_db, async_session
 from .models import Instance
-from .routers import auth, collector, instances, agents, sessions, tokens, dashboard, ranks
+from .routers import auth, collector, instances, agents, sessions, tokens, dashboard
 
 
 async def check_instance_status():
@@ -59,7 +59,6 @@ app.include_router(instances.router)
 app.include_router(agents.router)
 app.include_router(sessions.router)
 app.include_router(tokens.router)
-app.include_router(ranks.router)
 
 
 @app.get("/healthz")

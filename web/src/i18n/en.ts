@@ -8,7 +8,6 @@ export default {
     dashboard: 'Dashboard',
     instances: 'Instances',
     agents: 'Agents',
-    ranks: 'Bird\'s Eye',
     tokens: 'Token Stats',
   },
   lang: {
@@ -139,15 +138,6 @@ export default {
     sessionColTotal: 'Total',
     sessionColModel: 'Model',
     sessionColUpdated: 'Updated',
-  },
-
-  // Ranks
-  ranks: {
-    title: "Bird's Eye View",
-    desc: 'Agent distribution by token usage',
-    totalAgents: 'Total Agents',
-    sessions: 'sessions',
-    empty: 'No agent data',
   },
 
   // Token Stats

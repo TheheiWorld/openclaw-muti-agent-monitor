@@ -8,7 +8,6 @@ export default {
     dashboard: 'Dashboard',
     instances: '实例管理',
     agents: 'Agent 管理',
-    ranks: 'Agent 鸟瞰',
     tokens: 'Token 统计',
   },
   lang: {
@@ -139,15 +138,6 @@ export default {
     sessionColTotal: 'Total',
     sessionColModel: '模型',
     sessionColUpdated: '更新时间',
-  },
-
-  // Ranks
-  ranks: {
-    title: 'Agent 鸟瞰',
-    desc: '按 Token 用量分布的全局视图',
-    totalAgents: 'Agent 总数',
-    sessions: '会话',
-    empty: '暂无 Agent 数据',
   },
 
   // Token Stats

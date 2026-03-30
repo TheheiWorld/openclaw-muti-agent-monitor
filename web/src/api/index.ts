@@ -84,6 +84,3 @@ export const getTokenTrend = (params?: {
   instance_id?: string
   agent_id?: string
 }) => api.get('/tokens/trend', { params })
-
-// Ranks
-export const getRanks = () => api.get('/ranks')

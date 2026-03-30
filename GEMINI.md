@@ -8,7 +8,7 @@ A comprehensive monitoring platform for OpenClaw instances, agents, and sessions
 - **Backend:** FastAPI (Python 3.10+) with SQLAlchemy (Async) and SQLite.
 - **Frontend:** Vue 3 with TypeScript, Vite, Element Plus, and ECharts.
 - **Collector:** Lightweight Python script that wraps the OpenClaw CLI to gather metrics.
-- **Key Features:** Dashboard overview, instance health tracking, agent status monitoring, session/token usage analytics, and agent document synchronization.
+- **Key Features:** Dashboard overview, instance health tracking, agent status monitoring, session/token usage analytics.
 
 ## Directory Structure
 

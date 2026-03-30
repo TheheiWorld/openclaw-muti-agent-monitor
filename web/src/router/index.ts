@@ -4,7 +4,6 @@ import Instances from '../views/Instances.vue'
 import InstanceDetail from '../views/InstanceDetail.vue'
 import Agents from '../views/Agents.vue'
 import AgentDetail from '../views/AgentDetail.vue'
-import Ranks from '../views/Ranks.vue'
 import TokenStats from '../views/TokenStats.vue'
 import Login from '../views/Login.vue'
 
@@ -15,7 +14,6 @@ const routes = [
   { path: '/instances/:id', name: 'InstanceDetail', component: InstanceDetail },
   { path: '/agents', name: 'Agents', component: Agents },
   { path: '/agents/:id', name: 'AgentDetail', component: AgentDetail },
-  { path: '/ranks', name: 'Ranks', component: Ranks },
   { path: '/tokens', name: 'TokenStats', component: TokenStats },
 ]
 
